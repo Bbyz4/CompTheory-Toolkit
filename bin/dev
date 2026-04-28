@@ -1,0 +1,37 @@
+#!/bin/sh
+set -eu
+
+root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root_dir"
+
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
+fi
+
+use_service_ports=0
+if [ "${1:-}" = "--service-ports" ]; then
+  use_service_ports=1
+  shift
+fi
+
+if [ "$#" -eq 0 ]; then
+  set -- bash
+fi
+
+if [ "${IN_DEV_CONTAINER:-}" = "1" ]; then
+  exec opam exec -- "$@"
+fi
+
+./scripts/ensure_docker.sh
+
+if [ "$use_service_ports" -eq 1 ]; then
+  exec docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm \
+    --publish "${APP_PORT:-8080}:${APP_PORT:-8080}" \
+    --publish "${WEB_PORT:-8081}:${WEB_PORT:-8081}" \
+    dev opam exec -- "$@"
+fi
+
+exec docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm dev opam exec -- "$@"

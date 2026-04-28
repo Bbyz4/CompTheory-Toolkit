@@ -1,0 +1,8 @@
+(executable
+ (name test_main)
+ (libraries toolkit unix lwt.unix yojson dream))
+
+(rule
+ (alias runtest)
+ (deps test_main.exe ../scripts/with_system_libs.sh)
+ (action (run sh %{dep:../scripts/with_system_libs.sh} ./test_main.exe)))

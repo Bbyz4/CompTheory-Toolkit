@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    env:
+      OPAMSOLVERTIMEOUT: 300
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: 4.14.2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpq-dev libssl-dev libev-dev libgmp-dev pkg-config m4
+
+      - name: Install opam dependencies
+        run: opam install . --deps-only --with-test -y
+
+      - name: Build
+        run: opam exec -- dune build @all
+
+      - name: Test
+        run: opam exec -- dune runtest

@@ -1,0 +1,6 @@
+_build/
+.git/
+.github/
+*.opam.locked
+.devcontainer/
+.env
