@@ -1,4 +1,5 @@
 type t = {
+  mode : Runtime_mode.t;
   host : string;
   port : int;
   base_url : string;
@@ -16,16 +17,11 @@ type t = {
   smtp_host : string;
   smtp_port : int;
   mail_from : string;
-  admin_username : string option;
-  admin_email : string option;
-  admin_password : string option;
 }
 
 let env name = Sys.getenv_opt name
 
 let env_string name ~default = Util.option (env name) ~default
-
-let env_string_opt name = env name
 
 let env_int name ~default =
   match env name with
@@ -40,18 +36,20 @@ let env_float name ~default =
   | None -> default
 
 let load () =
+  let mode = Runtime_mode.load () in
   let host = env_string "APP_HOST" ~default:"0.0.0.0" in
   let port = env_int "APP_PORT" ~default:8080 in
   let base_url =
     env_string "APP_BASE_URL"
-      ~default:(Printf.sprintf "http://127.0.0.1:%d" port)
+      ~default:(Printf.sprintf "http://localhost:%d" port)
   in
   {
+    mode;
     host;
     port;
     base_url;
     public_web_base_url =
-      env_string "PUBLIC_WEB_BASE_URL" ~default:"http://127.0.0.1:8081";
+      env_string "PUBLIC_WEB_BASE_URL" ~default:"http://localhost:8081";
     db_url =
       env_string "DATABASE_URL"
         ~default:"postgresql://toolkit:toolkit@db:5432/toolkit";
@@ -73,7 +71,4 @@ let load () =
     smtp_host = env_string "SMTP_HOST" ~default:"127.0.0.1";
     smtp_port = env_int "SMTP_PORT" ~default:1025;
     mail_from = env_string "MAIL_FROM" ~default:"no-reply@recognita.xyz";
-    admin_username = env_string_opt "ADMIN_USERNAME";
-    admin_email = env_string_opt "ADMIN_EMAIL";
-    admin_password = env_string_opt "ADMIN_PASSWORD";
   }

@@ -338,31 +338,3 @@ let set_ban deps ~access_token ~user_id ~is_banned ~ban_reason =
             match revoked with
             | Ok () -> ok (Domain.public_user_of_user user)
             | Error repo_error -> error (map_repo_error repo_error)
-
-let bootstrap_admin deps =
-  match (deps.config.admin_username, deps.config.admin_password) with
-  | Some username, Some password -> (
-      let admin_email =
-        Util.option deps.config.admin_email ~default:"admin@recognita.xyz"
-      in
-      match
-        ( validate_username username,
-          validate_email admin_email,
-          validate_password password )
-      with
-      | Ok (), Ok normalized_email, Ok () ->
-          let password_hash = Password.make password in
-          let* result =
-            deps.repo.upsert_admin ~username ~email:normalized_email
-              ~password_hash ~updated_at:(deps.clock.now ())
-          in
-          begin
-            match result with
-            | Ok _ -> ok ()
-            | Error repo_error -> error (map_repo_error repo_error)
-          end
-      | Error app_error, _, _
-      | _, Error app_error, _
-      | _, _, Error app_error ->
-          error app_error)
-  | _ -> ok ()

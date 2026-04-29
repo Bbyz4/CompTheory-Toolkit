@@ -8,7 +8,7 @@ let fallback =
     "description": "Minimalist authentication and moderation API built in OCaml with Dream, Caqti and PostgreSQL."
   },
   "servers": [
-    { "url": "http://127.0.0.1:8080" }
+    { "url": "http://localhost:8080" }
   ],
   "components": {
     "securitySchemes": {

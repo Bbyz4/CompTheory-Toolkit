@@ -11,7 +11,7 @@ let run_with_connection db_url handler =
               ("Failed to connect to database: " ^ Caqti_error.show error)))
   | Ok connection -> handler connection
 
-let run config clock =
+let run config _clock =
   let* migration_result =
     run_with_connection config.Config.db_url (fun connection ->
         let repo = Caqti_repo.make connection in
@@ -26,13 +26,4 @@ let run config clock =
   in
   match migration_result with
   | Error _ as error -> Lwt.return error
-  | Ok () ->
-      run_with_connection config.Config.db_url (fun connection ->
-          let repo = Caqti_repo.make connection in
-          Auth_service.bootstrap_admin
-            {
-              repo;
-              clock;
-              config;
-              mailer = Verification_mailer.noop;
-            })
+  | Ok () -> Lwt.return (Ok ())

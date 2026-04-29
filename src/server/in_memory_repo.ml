@@ -58,36 +58,6 @@ let make () =
       Hashtbl.replace state.emails email user.Domain.id;
       Lwt.return (Ok user)
   in
-  let upsert_admin ~username ~email ~password_hash ~updated_at =
-    match Hashtbl.find_opt state.usernames username with
-    | None ->
-        create_user ~username ~email ~password_hash ~role:Domain.Admin
-          ~created_at:updated_at
-    | Some user_id -> (
-        match user_by_id user_id with
-        | None -> Lwt.return (Error (Repository.Not_found "Admin user not found"))
-        | Some user -> (
-            match Hashtbl.find_opt state.emails email with
-            | Some owner_id when owner_id <> user_id ->
-                Lwt.return (Error (Repository.Conflict "Email already exists"))
-            | _ ->
-                Hashtbl.remove state.emails user.Domain.email;
-                let next_user =
-                  {
-                    user with
-                    email;
-                    password_hash;
-                    role = Domain.Admin;
-                    verified = true;
-                    is_banned = false;
-                    ban_reason = None;
-                    updated_at;
-                  }
-                in
-                Hashtbl.replace state.users user_id next_user;
-                Hashtbl.replace state.emails email user_id;
-                Lwt.return (Ok next_user)))
-  in
   let find_user_by_username username =
     match Hashtbl.find_opt state.usernames username with
     | None -> Lwt.return (Ok None)
@@ -115,6 +85,16 @@ let make () =
         sorted_rows
     in
     Lwt.return (Ok users)
+  in
+  let update_role ~user_id ~role ~updated_at =
+    match user_by_id user_id with
+    | None -> Lwt.return (Ok None)
+    | Some user ->
+        let next_user =
+          { user with role; verified = user.verified || role = Domain.Admin; updated_at }
+        in
+        Hashtbl.replace state.users user_id next_user;
+        Lwt.return (Ok (Some next_user))
   in
   let update_ban ~user_id ~is_banned ~ban_reason ~updated_at =
     match user_by_id user_id with
@@ -215,8 +195,8 @@ let make () =
     find_user_by_email;
     find_user_by_id;
     create_user;
-    upsert_admin;
     list_users;
+    update_role;
     update_ban;
     create_session;
     find_session_by_access_token;

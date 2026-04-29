@@ -7,7 +7,7 @@ type response = {
 
 let parse_base_url base_url =
   let uri = Uri.of_string base_url in
-  let host = Option.value (Uri.host uri) ~default:"127.0.0.1" in
+  let host = Option.value (Uri.host uri) ~default:"localhost" in
   let port = Option.value (Uri.port uri) ~default:80 in
   let prefix =
     match Uri.path uri with "" -> "" | "/" -> "" | path -> path

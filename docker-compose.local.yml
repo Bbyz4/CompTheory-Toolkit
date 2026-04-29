@@ -1,0 +1,24 @@
+services:
+  db:
+    ports:
+      - "${POSTGRES_PUBLIC_PORT:-5432}:5432"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "${SMTP_PUBLIC_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PUBLIC_PORT:-8025}:8025"
+
+  app:
+    depends_on:
+      mailpit:
+        condition: service_started
+    environment:
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: 1025
+    ports:
+      - "${APP_PUBLIC_PORT:-8080}:${APP_PORT:-8080}"
+
+  web:
+    ports:
+      - "${WEB_PUBLIC_PORT:-8081}:${WEB_PORT:-8081}"

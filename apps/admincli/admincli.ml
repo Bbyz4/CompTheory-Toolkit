@@ -45,9 +45,21 @@ let ban_user_term =
   in
   Cmdliner.Cmd.v (Cmdliner.Cmd.info "ban-user" ~doc) term
 
+let promote_admin_term =
+  let doc = "Promote a user to admin directly in the database." in
+  let term =
+    let run db_url user_id =
+      emit_result
+        (Toolkit.Admin_cli.run ?db_url
+           (Toolkit.Admin_cli.Promote_admin { user_id }))
+    in
+    Cmdliner.Term.(ret (const run $ db_url_arg $ user_id_arg))
+  in
+  Cmdliner.Cmd.v (Cmdliner.Cmd.info "promote-admin" ~doc) term
+
 let cmd =
   let doc = "Administrative CLI for direct host-side moderation tasks." in
   Cmdliner.Cmd.group (Cmdliner.Cmd.info "admincli" ~doc)
-    [ list_users_term; ban_user_term ]
+    [ list_users_term; ban_user_term; promote_admin_term ]
 
 let () = exit (Cmdliner.Cmd.eval cmd)

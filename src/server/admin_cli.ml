@@ -6,10 +6,14 @@ type command =
       user_id : int;
       reason : string option;
     }
+  | Promote_admin of {
+      user_id : int;
+    }
 
 type outcome =
   | Users_listed of Domain.public_user list
   | User_banned of Domain.public_user
+  | User_promoted_to_admin of Domain.public_user
 
 let default_ban_reason = "banned via admincli"
 
@@ -23,18 +27,13 @@ let normalize_reason = function
   | None -> Some default_ban_reason
 
 let prepare ~(repo : Repository.t) ~(clock : Clock.t) ~config =
+  let _ = clock in
+  let _ = config in
   let* init_result = repo.init_schema () in
   match init_result with
   | Error repo_error ->
       Lwt.return (Error (Repository.error_message repo_error))
-  | Ok () ->
-      let* bootstrap_result =
-        Auth_service.bootstrap_admin
-          { repo; clock; config; mailer = Verification_mailer.noop }
-      in
-      match bootstrap_result with
-      | Ok () -> Lwt.return (Ok ())
-      | Error app_error -> Lwt.return (Error (App_error.message app_error))
+  | Ok () -> Lwt.return (Ok ())
 
 let perform ~(repo : Repository.t) ~(clock : Clock.t) = function
   | List_users -> (
@@ -43,7 +42,7 @@ let perform ~(repo : Repository.t) ~(clock : Clock.t) = function
       | Ok users -> Lwt.return (Ok (Users_listed users))
       | Error repo_error ->
           Lwt.return (Error (Repository.error_message repo_error)))
-  | Ban_user { user_id; reason } ->
+  | Ban_user { user_id; reason } -> (
       let* found = repo.find_user_by_id user_id in
       match found with
       | Error repo_error ->
@@ -69,7 +68,18 @@ let perform ~(repo : Repository.t) ~(clock : Clock.t) = function
                   Lwt.return
                     (Ok (User_banned (Domain.public_user_of_user updated_user)))
               | Error repo_error ->
-                  Lwt.return (Error (Repository.error_message repo_error))
+                  Lwt.return (Error (Repository.error_message repo_error)))
+  | Promote_admin { user_id } ->
+      let now = clock.now () in
+      let* updated =
+        repo.update_role ~user_id ~role:Domain.Admin ~updated_at:now
+      in
+      match updated with
+      | Error repo_error ->
+          Lwt.return (Error (Repository.error_message repo_error))
+      | Ok None -> Lwt.return (Error "User not found")
+      | Ok (Some user) ->
+          Lwt.return (Ok (User_promoted_to_admin (Domain.public_user_of_user user)))
 
 let ellipsize ~max_width value =
   if String.length value <= max_width then
@@ -163,9 +173,14 @@ let render_ban_result (user : Domain.public_user) =
   Printf.sprintf "Banned user #%d (%s)\nemail: %s\nreason: %s\n" user.id
     user.username user.email reason
 
+let render_promote_result (user : Domain.public_user) =
+  Printf.sprintf "Promoted user #%d (%s) to admin\nemail: %s\n" user.id
+    user.username user.email
+
 let render = function
   | Users_listed users -> render_user_table users
   | User_banned user -> render_ban_result user
+  | User_promoted_to_admin user -> render_promote_result user
 
 let run_lwt ?db_url command =
   let config = Config.load () in

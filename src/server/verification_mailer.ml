@@ -55,6 +55,11 @@ let expect_code ic expected =
       else
         Error (String.concat "\n" lines)
 
+let helo_domain from_address =
+  match Util.split_once ~on:'@' from_address with
+  | Some (_local, domain) when String.trim domain <> "" -> domain
+  | _ -> "localhost"
+
 let smtp_send ~host ~port ~from_address ~to_address ~subject ~body =
   let sockaddr =
     match Unix.getaddrinfo host (string_of_int port) [ Unix.AI_SOCKTYPE Unix.SOCK_STREAM ] with
@@ -77,7 +82,7 @@ let smtp_send ~host ~port ~from_address ~to_address ~subject ~body =
           in
           let ( let* ) result f = match result with Ok value -> f value | Error _ as error -> error in
           let* () = expect_code ic 220 in
-          send_line "EHLO recognita.xyz";
+          send_line ("EHLO " ^ helo_domain from_address);
           let* () = expect_code ic 250 in
           send_line ("MAIL FROM:<" ^ from_address ^ ">");
           let* () = expect_code ic 250 in

@@ -2,7 +2,9 @@ name: ci
 
 on:
   push:
+    branches: ["server"]
   pull_request:
+    branches: ["server"]
 
 jobs:
   build-test:
@@ -31,3 +33,68 @@ jobs:
 
       - name: Test
         run: opam exec -- dune runtest
+
+  deploy:
+    needs: build-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/server'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SERVER_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
+        env:
+          SERVER_ADDRESS: ${{ secrets.SERVER_ADDRESS }}
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$SERVER_ADDRESS" >> ~/.ssh/known_hosts
+
+      - name: Deploy on server
+        env:
+          SERVER_ADDRESS: ${{ secrets.SERVER_ADDRESS }}
+          SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
+          SECRET_CODE: ${{ secrets.SECRET_CODE }}
+          SERVER_APP_DIR: ${{ vars.SERVER_APP_DIR }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          ssh "${SERVER_USERNAME}@${SERVER_ADDRESS}" \
+            "SERVER_APP_DIR='${SERVER_APP_DIR}' SECRET_CODE='${SECRET_CODE}' REPO_NAME='${REPO_NAME}' BRANCH_NAME='${BRANCH_NAME}' bash -se" <<'EOF'
+          set -eu
+
+          app_dir=""
+          for candidate in \
+            "${SERVER_APP_DIR:-}" \
+            "$HOME/$REPO_NAME" \
+            "/srv/$REPO_NAME" \
+            "/opt/$REPO_NAME"
+          do
+            if [ -n "$candidate" ] && [ -d "$candidate/.git" ]; then
+              app_dir="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "$app_dir" ]; then
+            printf '%s\n' \
+              "Could not locate repo directory for $REPO_NAME." \
+              "Set GitHub variable SERVER_APP_DIR or use one of: $HOME/$REPO_NAME, /srv/$REPO_NAME, /opt/$REPO_NAME." >&2
+            exit 1
+          fi
+
+          cd "$app_dir"
+          git fetch origin "$BRANCH_NAME"
+
+          if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
+            git checkout "$BRANCH_NAME"
+          else
+            git checkout -b "$BRANCH_NAME" "origin/$BRANCH_NAME"
+          fi
+
+          git pull --ff-only origin "$BRANCH_NAME"
+          ACCESS_GATE_CODE="$SECRET_CODE" APP_MODE=deployment ./bin/compose up --build -d
+          EOF

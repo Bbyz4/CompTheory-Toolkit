@@ -10,8 +10,8 @@ fi
 
 ./scripts/ensure_docker.sh
 
-if docker compose ps --status running --services 2>/dev/null | grep -qx 'app'; then
-  exec docker compose exec -T app /app/admincli.exe "$@"
+if ./bin/compose ps --status running --services 2>/dev/null | grep -qx 'app'; then
+  exec ./bin/compose exec -T app /app/admincli.exe "$@"
 fi
 
-exec docker compose run --rm app /app/admincli.exe "$@"
+exec ./bin/compose run --rm app /app/admincli.exe "$@"

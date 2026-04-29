@@ -1,0 +1,70 @@
+services:
+  db:
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:latest
+    command: ["--webroot", "${MAILPIT_WEBROOT:-/mailpit}"]
+    restart: unless-stopped
+
+  app:
+    restart: unless-stopped
+    depends_on:
+      mailpit:
+        condition: service_started
+    environment:
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+
+  web:
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_started
+      mailpit:
+        condition: service_started
+    ports:
+      - "${WEB_PUBLIC_PORT:-80}:80"
+      - "${WEB_TLS_PUBLIC_PORT:-443}:443"
+    environment:
+      NGINX_SERVER_NAME: ${NGINX_SERVER_NAME:-recognita.xyz}
+      NGINX_ENABLE_TLS: ${NGINX_ENABLE_TLS:-auto}
+      NGINX_TLS_CERT_FILE: ${NGINX_TLS_CERT_FILE:-/etc/nginx/certs/origin.crt}
+      NGINX_TLS_KEY_FILE: ${NGINX_TLS_KEY_FILE:-/etc/nginx/certs/origin.key}
+    volumes:
+      - ./infra/nginx/default.http.conf.template:/opt/recognita-nginx/default.http.conf.template:ro
+      - ./infra/nginx/default.tls.conf.template:/opt/recognita-nginx/default.tls.conf.template:ro
+      - ./infra/nginx/docker-entrypoint.d/19-select-nginx-template.sh:/docker-entrypoint.d/19-select-nginx-template.sh:ro
+      - ./infra/nginx/certs:/etc/nginx/certs:ro
+      - nginx_logs:/var/log/nginx
+
+  fail2ban:
+    image: crazymax/fail2ban:latest
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    depends_on:
+      nginx:
+        condition: service_started
+    environment:
+      TZ: ${TZ:-Europe/Rome}
+      F2B_LOG_LEVEL: INFO
+      F2B_DB_PURGE_AGE: 7d
+    volumes:
+      - ./infra/fail2ban/jail.d:/data/jail.d:ro
+      - ./infra/fail2ban/filter.d:/data/filter.d:ro
+      - nginx_logs:/var/log/nginx:ro
+      - fail2ban_data:/data/db
+
+volumes:
+  nginx_logs:
+  fail2ban_data:

@@ -15,13 +15,12 @@ type t = {
     role:Domain.role ->
     created_at:float ->
     (Domain.user, error) result Lwt.t;
-  upsert_admin :
-    username:string ->
-    email:string ->
-    password_hash:string ->
-    updated_at:float ->
-    (Domain.user, error) result Lwt.t;
   list_users : unit -> (Domain.public_user list, error) result Lwt.t;
+  update_role :
+    user_id:int ->
+    role:Domain.role ->
+    updated_at:float ->
+    (Domain.user option, error) result Lwt.t;
   update_ban :
     user_id:int ->
     is_banned:bool ->

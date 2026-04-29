@@ -2,18 +2,25 @@ SHELL := /bin/sh
 
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap up down logs ps rebuild build test shell run-api run-web
+.PHONY: help bootstrap up down logs ps rebuild build test shell run-api run-web local-up deploy-up local-down deploy-down local-logs deploy-logs deploy-cert
 
 DOCKER_CHECK := ./scripts/ensure_docker.sh
 
 help:
 	@printf '%s\n' \
-		'make bootstrap  - build images and start the Docker stack in background' \
-		'make up         - build images and start the Docker stack in background' \
-		'make down       - stop the Docker stack' \
-		'make logs       - stream compose logs' \
-		'make ps         - show compose services' \
-		'make rebuild    - rebuild Docker images without cache' \
+		'make bootstrap   - build images and start the stack using APP_MODE from .env' \
+		'make up          - build images and start the stack using APP_MODE from .env' \
+		'make down        - stop the stack selected by APP_MODE from .env' \
+		'make logs        - stream logs for the stack selected by APP_MODE from .env' \
+		'make ps          - show services for the stack selected by APP_MODE from .env' \
+		'make rebuild     - rebuild images for the stack selected by APP_MODE from .env' \
+		'make local-up    - force local stack' \
+		'make deploy-up   - force deployment stack' \
+		'make deploy-cert - generate a self-signed TLS cert for the deployment nginx origin' \
+		'make local-down  - stop local stack' \
+		'make deploy-down - stop deployment stack' \
+		'make local-logs  - stream local stack logs' \
+		'make deploy-logs - stream deployment stack logs' \
 		'make build      - build all OCaml targets in the dev environment' \
 		'make test       - run the test suite in the dev environment' \
 		'make shell      - open a shell in the dev environment' \
@@ -25,23 +32,50 @@ bootstrap: up
 
 up:
 	$(DOCKER_CHECK)
-	docker compose up --build -d
+	./bin/compose up --build -d
 
 down:
 	$(DOCKER_CHECK)
-	docker compose down --remove-orphans
+	./bin/compose down --remove-orphans
 
 logs:
 	$(DOCKER_CHECK)
-	docker compose logs -f --tail=100
+	./bin/compose logs -f --tail=100
 
 ps:
 	$(DOCKER_CHECK)
-	docker compose ps
+	./bin/compose ps
 
 rebuild:
 	$(DOCKER_CHECK)
-	docker compose build --no-cache
+	./bin/compose build --no-cache
+
+local-up:
+	$(DOCKER_CHECK)
+	APP_MODE=local ./bin/compose up --build -d
+
+deploy-up:
+	$(DOCKER_CHECK)
+	APP_MODE=deployment ./bin/compose up --build -d
+
+deploy-cert:
+	./scripts/generate_deploy_cert.sh
+
+local-down:
+	$(DOCKER_CHECK)
+	APP_MODE=local ./bin/compose down --remove-orphans
+
+deploy-down:
+	$(DOCKER_CHECK)
+	APP_MODE=deployment ./bin/compose down --remove-orphans
+
+local-logs:
+	$(DOCKER_CHECK)
+	APP_MODE=local ./bin/compose logs -f --tail=100
+
+deploy-logs:
+	$(DOCKER_CHECK)
+	APP_MODE=deployment ./bin/compose logs -f --tail=100
 
 build:
 	./bin/dev dune build @all

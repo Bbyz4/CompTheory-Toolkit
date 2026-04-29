@@ -29,8 +29,8 @@ fi
 
 if [ "$use_service_ports" -eq 1 ]; then
   exec docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm \
-    --publish "${APP_PORT:-8080}:${APP_PORT:-8080}" \
-    --publish "${WEB_PORT:-8081}:${WEB_PORT:-8081}" \
+    --publish "${APP_PUBLIC_PORT:-8080}:${APP_PORT:-8080}" \
+    --publish "${WEB_PUBLIC_PORT:-8081}:${WEB_PORT:-8081}" \
     dev opam exec -- "$@"
 fi
 

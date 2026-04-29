@@ -195,33 +195,6 @@ module Q = struct
       |}
       ^ user_json)
 
-  let upsert_admin =
-    Caqti_type.(tup4 string string string (tup2 float float) ->! string)
-      ({|
-        INSERT INTO users (
-          username,
-          email,
-          password_hash,
-          role,
-          verified,
-          is_banned,
-          ban_reason,
-          created_at,
-          updated_at
-        )
-        VALUES (?, ?, ?, 'admin', TRUE, FALSE, NULL, ?, ?)
-        ON CONFLICT (username) DO UPDATE SET
-          email = EXCLUDED.email,
-          password_hash = EXCLUDED.password_hash,
-          role = 'admin',
-          verified = TRUE,
-          is_banned = FALSE,
-          ban_reason = NULL,
-          updated_at = EXCLUDED.updated_at
-        RETURNING
-      |}
-      ^ user_json)
-
   let list_users =
     Caqti_type.(unit ->! string)
       ({|
@@ -240,6 +213,19 @@ module Q = struct
           ORDER BY id
         ) ordered_users
       |})
+
+  let update_role =
+    Caqti_type.(tup4 string string float int ->? string)
+      ({|
+        UPDATE users
+        SET
+          role = ?,
+          verified = CASE WHEN ? = 'admin' THEN TRUE ELSE verified END,
+          updated_at = ?
+        WHERE id = ?
+        RETURNING
+      |}
+      ^ user_json)
 
   let update_ban =
     Caqti_type.(tup4 bool (option string) float int ->? string)
@@ -547,21 +533,22 @@ let make (db : Caqti_lwt.connection) =
       | Ok json -> parse_user json
       | Error error -> Error (map_caqti_error error))
   in
-  let upsert_admin ~username ~email ~password_hash ~updated_at =
-    let* result =
-      Db.find Q.upsert_admin
-        (username, email, password_hash, (updated_at, updated_at))
-    in
-    Lwt.return
-      (match result with
-      | Ok json -> parse_user json
-      | Error error -> Error (map_caqti_error error))
-  in
   let list_users () =
     let* result = Db.find Q.list_users () in
     Lwt.return
       (match result with
       | Ok json -> parse_public_user_list json
+      | Error error -> Error (map_caqti_error error))
+  in
+  let update_role ~user_id ~role ~updated_at =
+    let role_name = Domain.role_to_string role in
+    let* result =
+      Db.find_opt Q.update_role (role_name, role_name, updated_at, user_id)
+    in
+    Lwt.return
+      (match result with
+      | Ok None -> Ok None
+      | Ok (Some json) -> Result.map Option.some (parse_user json)
       | Error error -> Error (map_caqti_error error))
   in
   let update_ban ~user_id ~is_banned ~ban_reason ~updated_at =
@@ -662,8 +649,8 @@ let make (db : Caqti_lwt.connection) =
     find_user_by_email;
     find_user_by_id;
     create_user;
-    upsert_admin;
     list_users;
+    update_role;
     update_ban;
     create_session;
     find_session_by_access_token;

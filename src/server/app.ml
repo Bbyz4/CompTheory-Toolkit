@@ -261,7 +261,14 @@ let make app =
   Dream.router
     [
       Dream.get "/health" (fun _request ->
-          json_response ~code:200 (status_json "ok" "healthy"));
+          json_response ~code:200
+            (`Assoc
+              [
+                ("status", `String "ok");
+                ("message", `String "healthy");
+                ( "mode",
+                  `String (Runtime_mode.to_string app.config.mode) );
+              ]));
       Dream.get "/openapi.json" (fun _request ->
           Dream.respond ~code:200 ~headers:json_headers openapi_spec);
       Dream.scope "/api/v1" [] [

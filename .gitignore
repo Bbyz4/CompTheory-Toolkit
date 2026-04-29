@@ -3,4 +3,6 @@ _build/
 *.merlin
 .DS_Store
 .env
-
+.codex
+infra/nginx/certs/*
+!infra/nginx/certs/.gitkeep
