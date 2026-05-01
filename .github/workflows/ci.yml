@@ -124,6 +124,7 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           ACCESS_GATE_COOKIE_SECRET: ${{ secrets.ACCESS_GATE_COOKIE_SECRET }}
           SERVER_DEPLOY_DIR: ${{ vars.SERVER_DEPLOY_DIR }}
+          SERVER_PROJECT_NAME: ${{ vars.SERVER_PROJECT_NAME }}
           NGINX_SERVER_NAME: ${{ vars.NGINX_SERVER_NAME }}
           APP_BASE_URL: ${{ vars.APP_BASE_URL }}
           PUBLIC_WEB_BASE_URL: ${{ vars.PUBLIC_WEB_BASE_URL }}
@@ -140,9 +141,23 @@ jobs:
             printf '%q' "$1"
           }
 
-          deploy_dir="${SERVER_DEPLOY_DIR:-}"
-          quoted_deploy_dir="$(quote "$deploy_dir")"
-          remote_upload_cmd="set -eu; DEPLOY_DIR=${quoted_deploy_dir}; if [ -z \"\$DEPLOY_DIR\" ]; then DEPLOY_DIR=\"\$HOME/comp-theory-toolkit-deploy\"; fi; mkdir -p \"\$DEPLOY_DIR\"; tar -xzf - -C \"\$DEPLOY_DIR\""
+          deploy_root="${SERVER_DEPLOY_DIR:-}"
+          project_name="${SERVER_PROJECT_NAME:-comp-theory-toolkit}"
+          quoted_deploy_root="$(quote "$deploy_root")"
+          quoted_project_name="$(quote "$project_name")"
+
+          release_dir="$(
+            ssh "${SERVER_USERNAME}@${SERVER_ADDRESS}" \
+              "DEPLOY_ROOT=${quoted_deploy_root} bash -se" <<'EOF'
+          set -eu
+          if [ -z "${DEPLOY_ROOT:-}" ]; then
+            DEPLOY_ROOT="$HOME/comp-theory-toolkit-deploy"
+          fi
+          mkdir -p "$DEPLOY_ROOT/releases" "$DEPLOY_ROOT/state/nginx-certs"
+          release_dir="$(mktemp -d "$DEPLOY_ROOT/releases/release.XXXXXX")"
+          printf '%s\n' "$release_dir"
+          EOF
+          )"
 
           tar \
             --exclude='infra/nginx/certs' \
@@ -153,22 +168,29 @@ jobs:
             infra \
             scripts/generate_deploy_cert.sh \
           | ssh "${SERVER_USERNAME}@${SERVER_ADDRESS}" \
-            "$remote_upload_cmd"
+            "set -eu; RELEASE_DIR=$(quote "$release_dir"); tar -xzf - -C \"\$RELEASE_DIR\""
 
           ssh "${SERVER_USERNAME}@${SERVER_ADDRESS}" \
-            "DEPLOY_DIR=${quoted_deploy_dir} SECRET_CODE=$(quote "$SECRET_CODE") GHCR_USERNAME=$(quote "$GHCR_USERNAME") GHCR_TOKEN=$(quote "$GHCR_TOKEN") POSTGRES_PASSWORD=$(quote "$POSTGRES_PASSWORD") ACCESS_GATE_COOKIE_SECRET=$(quote "$ACCESS_GATE_COOKIE_SECRET") NGINX_SERVER_NAME=$(quote "$NGINX_SERVER_NAME") APP_BASE_URL=$(quote "$APP_BASE_URL") PUBLIC_WEB_BASE_URL=$(quote "$PUBLIC_WEB_BASE_URL") MAIL_FROM=$(quote "$MAIL_FROM") TZ=$(quote "$TZ") WEB_PUBLIC_PORT=$(quote "$WEB_PUBLIC_PORT") WEB_TLS_PUBLIC_PORT=$(quote "$WEB_TLS_PUBLIC_PORT") NGINX_ENABLE_TLS=$(quote "$NGINX_ENABLE_TLS") POSTGRES_DB=$(quote "$POSTGRES_DB") POSTGRES_USER=$(quote "$POSTGRES_USER") APP_IMAGE=$(quote "$APP_IMAGE") bash -se" <<'EOF'
+            "DEPLOY_ROOT=${quoted_deploy_root} PROJECT_NAME=${quoted_project_name} RELEASE_DIR=$(quote "$release_dir") SECRET_CODE=$(quote "$SECRET_CODE") GHCR_USERNAME=$(quote "$GHCR_USERNAME") GHCR_TOKEN=$(quote "$GHCR_TOKEN") POSTGRES_PASSWORD=$(quote "$POSTGRES_PASSWORD") ACCESS_GATE_COOKIE_SECRET=$(quote "$ACCESS_GATE_COOKIE_SECRET") NGINX_SERVER_NAME=$(quote "$NGINX_SERVER_NAME") APP_BASE_URL=$(quote "$APP_BASE_URL") PUBLIC_WEB_BASE_URL=$(quote "$PUBLIC_WEB_BASE_URL") MAIL_FROM=$(quote "$MAIL_FROM") TZ=$(quote "$TZ") WEB_PUBLIC_PORT=$(quote "$WEB_PUBLIC_PORT") WEB_TLS_PUBLIC_PORT=$(quote "$WEB_TLS_PUBLIC_PORT") NGINX_ENABLE_TLS=$(quote "$NGINX_ENABLE_TLS") POSTGRES_DB=$(quote "$POSTGRES_DB") POSTGRES_USER=$(quote "$POSTGRES_USER") APP_IMAGE=$(quote "$APP_IMAGE") bash -se" <<'EOF'
           set -eu
 
-          if [ -z "${DEPLOY_DIR:-}" ]; then
-            DEPLOY_DIR="$HOME/comp-theory-toolkit-deploy"
+          if [ -z "${DEPLOY_ROOT:-}" ]; then
+            DEPLOY_ROOT="$HOME/comp-theory-toolkit-deploy"
+          fi
+          if [ -z "${PROJECT_NAME:-}" ]; then
+            PROJECT_NAME="comp-theory-toolkit"
           fi
 
-          cd "$DEPLOY_DIR"
-          mkdir -p infra/nginx/certs
-
-          template_env="$DEPLOY_DIR/.env.deploy.example"
-          runtime_env="$DEPLOY_DIR/.env.deploy.runtime"
+          STATE_DIR="$DEPLOY_ROOT/state"
+          runtime_env="$STATE_DIR/.env.deploy.runtime"
           next_env="$runtime_env.next"
+
+          cd "$RELEASE_DIR"
+          mkdir -p "$STATE_DIR/nginx-certs"
+          rm -rf infra/nginx/certs
+          ln -s "$STATE_DIR/nginx-certs" infra/nginx/certs
+
+          template_env="$RELEASE_DIR/.env.deploy.example"
 
           get_existing() {
             key="$1"
@@ -290,8 +312,12 @@ jobs:
             printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
           fi
 
-          docker compose --env-file "$runtime_env" \
+          docker compose -p "$PROJECT_NAME" --env-file "$runtime_env" \
             -f docker-compose.yml -f docker-compose.deploy.yml pull app web
-          docker compose --env-file "$runtime_env" \
-            -f docker-compose.yml -f docker-compose.deploy.yml up -d --no-build app web nginx
+          docker compose -p "$PROJECT_NAME" --env-file "$runtime_env" \
+            -f docker-compose.yml -f docker-compose.deploy.yml up -d --no-build app web nginx fail2ban
+
+          ln -sfn "$RELEASE_DIR" "$DEPLOY_ROOT/current"
+          find "$DEPLOY_ROOT/releases" -mindepth 1 -maxdepth 1 -type d \
+            ! -path "$RELEASE_DIR" | sort | head -n -3 | xargs -r rm -rf
           EOF

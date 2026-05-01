@@ -53,6 +53,7 @@ Do GitHub Secrets ustaw:
 
 Opcjonalnie ustaw GitHub Variable `SERVER_DEPLOY_DIR`.
 Domyślnie workflow używa katalogu `~/comp-theory-toolkit-deploy`.
+Opcjonalnie ustaw też `SERVER_PROJECT_NAME`, jeśli chcesz własną nazwę projektu compose.
 
 Opcjonalnie możesz też ustawić GitHub Variables:
 
@@ -70,6 +71,8 @@ Opcjonalnie możesz też ustawić GitHub Variables:
 Workflow sam:
 
 - tworzy katalog deployowy na serwerze
+- używa świeżego katalogu release dla każdej wersji
+- trzyma stan i certy osobno, poza katalogiem release
 - wysyła aktualne pliki compose i `infra/`
 - generuje i utrzymuje plik env na podstawie `.env.deploy.example`
 - zachowuje trwałe sekrety między deployami, jeśli nie podasz ich jawnie w GitHub Secrets
