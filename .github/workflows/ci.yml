@@ -99,6 +99,9 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Start SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -118,52 +121,177 @@ jobs:
           SECRET_CODE: ${{ secrets.SECRET_CODE }}
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          SERVER_APP_DIR: ${{ vars.SERVER_APP_DIR }}
-          REPO_NAME: ${{ github.event.repository.name }}
-          BRANCH_NAME: ${{ github.ref_name }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          ACCESS_GATE_COOKIE_SECRET: ${{ secrets.ACCESS_GATE_COOKIE_SECRET }}
+          SERVER_DEPLOY_DIR: ${{ vars.SERVER_DEPLOY_DIR }}
+          NGINX_SERVER_NAME: ${{ vars.NGINX_SERVER_NAME }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          PUBLIC_WEB_BASE_URL: ${{ vars.PUBLIC_WEB_BASE_URL }}
+          MAIL_FROM: ${{ vars.MAIL_FROM }}
+          TZ: ${{ vars.TZ }}
+          WEB_PUBLIC_PORT: ${{ vars.WEB_PUBLIC_PORT }}
+          WEB_TLS_PUBLIC_PORT: ${{ vars.WEB_TLS_PUBLIC_PORT }}
+          NGINX_ENABLE_TLS: ${{ vars.NGINX_ENABLE_TLS }}
+          POSTGRES_DB: ${{ vars.POSTGRES_DB }}
+          POSTGRES_USER: ${{ vars.POSTGRES_USER }}
           APP_IMAGE: ${{ needs.build-image.outputs.image_ref }}
         run: |
+          quote() {
+            printf '%q' "$1"
+          }
+
+          deploy_dir="${SERVER_DEPLOY_DIR:-}"
+          quoted_deploy_dir="$(quote "$deploy_dir")"
+          remote_upload_cmd="set -eu; DEPLOY_DIR=${quoted_deploy_dir}; if [ -z \"\$DEPLOY_DIR\" ]; then DEPLOY_DIR=\"\$HOME/comp-theory-toolkit-deploy\"; fi; mkdir -p \"\$DEPLOY_DIR\"; tar -xzf - -C \"\$DEPLOY_DIR\""
+
+          tar \
+            --exclude='infra/nginx/certs' \
+            -czf - \
+            docker-compose.yml \
+            docker-compose.deploy.yml \
+            .env.deploy.example \
+            infra \
+            scripts/generate_deploy_cert.sh \
+          | ssh "${SERVER_USERNAME}@${SERVER_ADDRESS}" \
+            "$remote_upload_cmd"
+
           ssh "${SERVER_USERNAME}@${SERVER_ADDRESS}" \
-            "SERVER_APP_DIR='${SERVER_APP_DIR}' SECRET_CODE='${SECRET_CODE}' GHCR_USERNAME='${GHCR_USERNAME}' GHCR_TOKEN='${GHCR_TOKEN}' REPO_NAME='${REPO_NAME}' BRANCH_NAME='${BRANCH_NAME}' APP_IMAGE='${APP_IMAGE}' bash -se" <<'EOF'
+            "DEPLOY_DIR=${quoted_deploy_dir} SECRET_CODE=$(quote "$SECRET_CODE") GHCR_USERNAME=$(quote "$GHCR_USERNAME") GHCR_TOKEN=$(quote "$GHCR_TOKEN") POSTGRES_PASSWORD=$(quote "$POSTGRES_PASSWORD") ACCESS_GATE_COOKIE_SECRET=$(quote "$ACCESS_GATE_COOKIE_SECRET") NGINX_SERVER_NAME=$(quote "$NGINX_SERVER_NAME") APP_BASE_URL=$(quote "$APP_BASE_URL") PUBLIC_WEB_BASE_URL=$(quote "$PUBLIC_WEB_BASE_URL") MAIL_FROM=$(quote "$MAIL_FROM") TZ=$(quote "$TZ") WEB_PUBLIC_PORT=$(quote "$WEB_PUBLIC_PORT") WEB_TLS_PUBLIC_PORT=$(quote "$WEB_TLS_PUBLIC_PORT") NGINX_ENABLE_TLS=$(quote "$NGINX_ENABLE_TLS") POSTGRES_DB=$(quote "$POSTGRES_DB") POSTGRES_USER=$(quote "$POSTGRES_USER") APP_IMAGE=$(quote "$APP_IMAGE") bash -se" <<'EOF'
           set -eu
 
-          app_dir=""
-          for candidate in \
-            "${SERVER_APP_DIR:-}" \
-            "$HOME/$REPO_NAME" \
-            "/srv/$REPO_NAME" \
-            "/opt/$REPO_NAME"
-          do
-            if [ -n "$candidate" ] && [ -d "$candidate/.git" ]; then
-              app_dir="$candidate"
-              break
+          if [ -z "${DEPLOY_DIR:-}" ]; then
+            DEPLOY_DIR="$HOME/comp-theory-toolkit-deploy"
+          fi
+
+          cd "$DEPLOY_DIR"
+          mkdir -p infra/nginx/certs
+
+          template_env="$DEPLOY_DIR/.env.deploy.example"
+          runtime_env="$DEPLOY_DIR/.env.deploy.runtime"
+          next_env="$runtime_env.next"
+
+          get_existing() {
+            key="$1"
+            if [ -f "$runtime_env" ]; then
+              awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$runtime_env"
             fi
-          done
+          }
 
-          if [ -z "$app_dir" ]; then
-            printf '%s\n' \
-              "Could not locate repo directory for $REPO_NAME." \
-              "Set GitHub variable SERVER_APP_DIR or use one of: $HOME/$REPO_NAME, /srv/$REPO_NAME, /opt/$REPO_NAME." >&2
-            exit 1
+          set_kv() {
+            key="$1"
+            value="$2"
+            file="$3"
+            escaped_value=$(printf '%s' "$value" | sed 's/[&|\\]/\\&/g')
+            if grep -q "^${key}=" "$file"; then
+              sed -i "s|^${key}=.*|${key}=${escaped_value}|" "$file"
+            else
+              printf '%s=%s\n' "$key" "$value" >> "$file"
+            fi
+          }
+
+          preserve_or_override() {
+            key="$1"
+            override="$2"
+            if [ -n "$override" ]; then
+              set_kv "$key" "$override" "$next_env"
+              return
+            fi
+            existing="$(get_existing "$key" || true)"
+            if [ -n "$existing" ]; then
+              set_kv "$key" "$existing" "$next_env"
+            fi
+          }
+
+          random_hex() {
+            openssl rand -hex "$1"
+          }
+
+          cp "$template_env" "$next_env"
+
+          postgres_db="${POSTGRES_DB:-$(get_existing POSTGRES_DB)}"
+          if [ -z "$postgres_db" ]; then
+            postgres_db="toolkit"
           fi
 
-          cd "$app_dir"
-          git fetch origin "$BRANCH_NAME"
-
-          if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
-            git checkout "$BRANCH_NAME"
-          else
-            git checkout -b "$BRANCH_NAME" "origin/$BRANCH_NAME"
+          postgres_user="${POSTGRES_USER:-$(get_existing POSTGRES_USER)}"
+          if [ -z "$postgres_user" ]; then
+            postgres_user="toolkit"
           fi
 
-          git pull --ff-only origin "$BRANCH_NAME"
+          postgres_password="${POSTGRES_PASSWORD:-$(get_existing POSTGRES_PASSWORD)}"
+          if [ -z "$postgres_password" ]; then
+            postgres_password="$(random_hex 24)"
+          fi
+
+          cookie_secret="${ACCESS_GATE_COOKIE_SECRET:-$(get_existing ACCESS_GATE_COOKIE_SECRET)}"
+          if [ -z "$cookie_secret" ]; then
+            cookie_secret="$(random_hex 32)"
+          fi
+
+          server_name="${NGINX_SERVER_NAME:-$(get_existing NGINX_SERVER_NAME)}"
+          if [ -z "$server_name" ]; then
+            server_name="recognita.xyz"
+          fi
+
+          app_base_url="${APP_BASE_URL:-$(get_existing APP_BASE_URL)}"
+          if [ -z "$app_base_url" ]; then
+            app_base_url="https://$server_name"
+          fi
+
+          public_web_base_url="${PUBLIC_WEB_BASE_URL:-$(get_existing PUBLIC_WEB_BASE_URL)}"
+          if [ -z "$public_web_base_url" ]; then
+            public_web_base_url="$app_base_url"
+          fi
+
+          mail_from="${MAIL_FROM:-$(get_existing MAIL_FROM)}"
+          if [ -z "$mail_from" ]; then
+            mail_from="no-reply@$server_name"
+          fi
+
+          tz_value="${TZ:-$(get_existing TZ)}"
+          if [ -z "$tz_value" ]; then
+            tz_value="Europe/Rome"
+          fi
+
+          nginx_enable_tls="${NGINX_ENABLE_TLS:-$(get_existing NGINX_ENABLE_TLS)}"
+          if [ -z "$nginx_enable_tls" ]; then
+            nginx_enable_tls="auto"
+          fi
+
+          database_url="postgresql://${postgres_user}:${postgres_password}@db:5432/${postgres_db}"
+
+          set_kv APP_MODE deployment "$next_env"
+          set_kv APP_IMAGE "$APP_IMAGE" "$next_env"
+          set_kv POSTGRES_DB "$postgres_db" "$next_env"
+          set_kv POSTGRES_USER "$postgres_user" "$next_env"
+          set_kv POSTGRES_PASSWORD "$postgres_password" "$next_env"
+          set_kv APP_BASE_URL "$app_base_url" "$next_env"
+          set_kv PUBLIC_WEB_BASE_URL "$public_web_base_url" "$next_env"
+          set_kv NGINX_SERVER_NAME "$server_name" "$next_env"
+          set_kv NGINX_ENABLE_TLS "$nginx_enable_tls" "$next_env"
+          set_kv ACCESS_GATE_CODE "$SECRET_CODE" "$next_env"
+          set_kv ACCESS_GATE_COOKIE_SECRET "$cookie_secret" "$next_env"
+          set_kv DATABASE_URL "$database_url" "$next_env"
+          set_kv MAIL_FROM "$mail_from" "$next_env"
+          set_kv TZ "$tz_value" "$next_env"
+
+          preserve_or_override WEB_PUBLIC_PORT "${WEB_PUBLIC_PORT:-}"
+          preserve_or_override WEB_TLS_PUBLIC_PORT "${WEB_TLS_PUBLIC_PORT:-}"
+
+          mv "$next_env" "$runtime_env"
+
+          if [ ! -f infra/nginx/certs/origin.crt ] || [ ! -f infra/nginx/certs/origin.key ]; then
+            if command -v openssl >/dev/null 2>&1; then
+              NGINX_SERVER_NAME="$server_name" sh scripts/generate_deploy_cert.sh
+            fi
+          fi
 
           if [ -n "${GHCR_USERNAME:-}" ] && [ -n "${GHCR_TOKEN:-}" ]; then
             printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
           fi
 
-          ACCESS_GATE_CODE="$SECRET_CODE" APP_IMAGE="$APP_IMAGE" APP_MODE=deployment \
-            ./bin/compose pull app web
-          ACCESS_GATE_CODE="$SECRET_CODE" APP_IMAGE="$APP_IMAGE" APP_MODE=deployment \
-            ./bin/compose up -d --no-build app web nginx
+          docker compose --env-file "$runtime_env" \
+            -f docker-compose.yml -f docker-compose.deploy.yml pull app web
+          docker compose --env-file "$runtime_env" \
+            -f docker-compose.yml -f docker-compose.deploy.yml up -d --no-build app web nginx
           EOF
