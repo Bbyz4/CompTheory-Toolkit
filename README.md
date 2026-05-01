@@ -39,5 +39,29 @@ make deploy-up
 ```
 
 GitHub Actions działa tylko na branchu `server`.
-Do deployu używa `SERVER_ADDRESS`, `SERVER_USERNAME`, `SERVER_PRIVATE_KEY` i `SECRET_CODE`.
-Jeśli repo na serwerze leży gdzie indziej, ustaw `SERVER_APP_DIR` jako GitHub Variable.
+Buduje obraz w GitHub Actions, wrzuca go do GHCR i na serwerze robi tylko `pull + up -d`.
+
+Do GitHub Secrets ustaw:
+
+- `SERVER_ADDRESS`
+- `SERVER_USERNAME`
+- `SERVER_PRIVATE_KEY`
+- `SECRET_CODE`
+- opcjonalnie `GHCR_USERNAME` i `GHCR_TOKEN` jeśli pakiet w GHCR ma zostać prywatny
+
+Opcjonalnie ustaw GitHub Variable `SERVER_APP_DIR`, jeśli repo na serwerze leży poza `~/CompTheory-Toolkit`, `/srv/CompTheory-Toolkit` albo `/opt/CompTheory-Toolkit`.
+
+Jednorazowo na serwerze:
+
+```bash
+git clone git@github.com:Bbyz4/CompTheory-Toolkit.git
+cd CompTheory-Toolkit
+cp .env.deploy.example .env
+make deploy-cert
+```
+
+Jeśli nie podasz `GHCR_USERNAME` i `GHCR_TOKEN` w GitHub Secrets, to zrób na serwerze jednorazowo:
+
+```bash
+echo TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+```

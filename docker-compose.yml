@@ -1,8 +1,5 @@
 x-runtime-image: &runtime-image
-  image: comp-theory-toolkit-runtime:dev
-  build:
-    context: .
-    target: runtime
+  image: ${APP_IMAGE:-comp-theory-toolkit-runtime:dev}
 
 x-app-env: &app-env
   APP_MODE: ${APP_MODE:-local}
