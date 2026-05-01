@@ -309,12 +309,35 @@ jobs:
           fi
 
           if [ -n "${GHCR_USERNAME:-}" ] && [ -n "${GHCR_TOKEN:-}" ]; then
-            printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+            docker_login() {
+              run_docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+            }
           fi
 
-          docker compose -p "$PROJECT_NAME" --env-file "$runtime_env" \
+          run_docker() {
+            docker "$@"
+          }
+
+          if ! docker info >/dev/null 2>&1; then
+            if command -v sudo >/dev/null 2>&1 && sudo -n docker info >/dev/null 2>&1; then
+              run_docker() {
+                sudo -n docker "$@"
+              }
+            else
+              printf '%s\n' \
+                "The deploy user cannot access the Docker daemon." \
+                "Add it to the docker group or allow passwordless sudo for docker." >&2
+              exit 1
+            fi
+          fi
+
+          if [ -n "${GHCR_USERNAME:-}" ] && [ -n "${GHCR_TOKEN:-}" ]; then
+            printf '%s' "$GHCR_TOKEN" | docker_login
+          fi
+
+          run_docker compose -p "$PROJECT_NAME" --env-file "$runtime_env" \
             -f docker-compose.yml -f docker-compose.deploy.yml pull app web
-          docker compose -p "$PROJECT_NAME" --env-file "$runtime_env" \
+          run_docker compose -p "$PROJECT_NAME" --env-file "$runtime_env" \
             -f docker-compose.yml -f docker-compose.deploy.yml up -d --no-build app web nginx fail2ban
 
           ln -sfn "$RELEASE_DIR" "$DEPLOY_ROOT/current"
