@@ -17,6 +17,12 @@ type t = {
   smtp_host : string;
   smtp_port : int;
   mail_from : string;
+  rabbitmq_api_base_url : string;
+  rabbitmq_user : string;
+  rabbitmq_password : string;
+  rabbitmq_vhost : string;
+  rabbitmq_submission_queue : string;
+  submission_worker_poll_interval_seconds : float;
 }
 
 let env name = Sys.getenv_opt name
@@ -71,4 +77,13 @@ let load () =
     smtp_host = env_string "SMTP_HOST" ~default:"127.0.0.1";
     smtp_port = env_int "SMTP_PORT" ~default:1025;
     mail_from = env_string "MAIL_FROM" ~default:"no-reply@recognita.xyz";
+    rabbitmq_api_base_url =
+      env_string "RABBITMQ_API_BASE_URL" ~default:"http://rabbitmq:15672";
+    rabbitmq_user = env_string "RABBITMQ_USER" ~default:"guest";
+    rabbitmq_password = env_string "RABBITMQ_PASSWORD" ~default:"guest";
+    rabbitmq_vhost = env_string "RABBITMQ_VHOST" ~default:"/";
+    rabbitmq_submission_queue =
+      env_string "RABBITMQ_SUBMISSION_QUEUE" ~default:"submissions.pending";
+    submission_worker_poll_interval_seconds =
+      env_float "SUBMISSION_WORKER_POLL_INTERVAL_SECONDS" ~default:1.;
   }

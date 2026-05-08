@@ -55,6 +55,36 @@ type t = {
     verification_id:int -> consumed_at:float -> (unit, error) result Lwt.t;
   mark_user_verified :
     user_id:int -> updated_at:float -> (Domain.user option, error) result Lwt.t;
+  create_task :
+    title:string ->
+    slug:string option ->
+    short_description:string option ->
+    description:string ->
+    type_:Domain.task_type ->
+    author_id:int ->
+    difficulty:int ->
+    config:Yojson.Basic.t ->
+    status:Domain.task_status ->
+    visibility:Domain.task_visibility ->
+    published_at:float option ->
+    created_at:float ->
+    updated_at:float ->
+    (Domain.task, error) result Lwt.t;
+  list_tasks : unit -> (Domain.task list, error) result Lwt.t;
+  find_task_by_id : int -> (Domain.task option, error) result Lwt.t;
+  create_submission :
+    task_id:int ->
+    user_id:int ->
+    data:Yojson.Basic.t ->
+    created_at:float ->
+    (Domain.submission, error) result Lwt.t;
+  find_submission_by_id : int -> (Domain.submission option, error) result Lwt.t;
+  update_submission_result :
+    submission_id:int ->
+    verdict:Domain.submission_verdict ->
+    run_data:Yojson.Basic.t option ->
+    judged_at:float ->
+    (Domain.submission option, error) result Lwt.t;
 }
 
 let error_message = function

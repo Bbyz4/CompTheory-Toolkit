@@ -302,6 +302,128 @@
           }
         }
       }
+    },
+    "/api/v1/task-types/{type}/config-template": {
+      "get": {
+        "summary": "Get a task config template",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Config template returned"
+          }
+        }
+      }
+    },
+    "/api/v1/tasks": {
+      "get": {
+        "summary": "List public published tasks",
+        "responses": {
+          "200": {
+            "description": "Task list"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a task",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Task created"
+          },
+          "403": {
+            "description": "Admin only"
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{id}": {
+      "get": {
+        "summary": "Get one task",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task returned"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{id}/submissions": {
+      "post": {
+        "summary": "Create a submission for a task",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Submission created and queued"
+          }
+        }
+      }
+    },
+    "/api/v1/submissions/{id}": {
+      "get": {
+        "summary": "Get one submission",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Submission returned"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
     }
   }
 }

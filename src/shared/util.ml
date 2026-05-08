@@ -59,6 +59,35 @@ let hex_of_string value =
     value;
   Buffer.contents buffer
 
+let base64_encode value =
+  let alphabet =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+  in
+  let length = String.length value in
+  let buffer = Buffer.create (((length + 2) / 3) * 4) in
+  let rec loop index =
+    if index >= length then
+      ()
+    else
+      let a = Char.code value.[index] in
+      let b = if index + 1 < length then Char.code value.[index + 1] else 0 in
+      let c = if index + 2 < length then Char.code value.[index + 2] else 0 in
+      let triple = (a lsl 16) lor (b lsl 8) lor c in
+      Buffer.add_char buffer alphabet.[(triple lsr 18) land 0x3f];
+      Buffer.add_char buffer alphabet.[(triple lsr 12) land 0x3f];
+      if index + 1 < length then
+        Buffer.add_char buffer alphabet.[(triple lsr 6) land 0x3f]
+      else
+        Buffer.add_char buffer '=';
+      if index + 2 < length then
+        Buffer.add_char buffer alphabet.[triple land 0x3f]
+      else
+        Buffer.add_char buffer '=';
+      loop (index + 3)
+  in
+  loop 0;
+  Buffer.contents buffer
+
 let iso8601_of_unix_time seconds =
   let tm = Unix.gmtime seconds in
   Printf.sprintf "%04d-%02d-%02dT%02d:%02d:%02dZ" (tm.tm_year + 1900)
@@ -84,4 +113,3 @@ let sql_quote value =
 let sql_nullable = function None -> "NULL" | Some value -> sql_quote value
 
 let pp_exn exn = Printexc.to_string exn
-

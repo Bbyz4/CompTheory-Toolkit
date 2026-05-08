@@ -32,7 +32,9 @@ let json_headers = [ ("Content-Type", "application/json") ]
 type fixture = {
   app : Dream.handler;
   repo : Toolkit.Repository.t;
+  clock : Toolkit.Clock.t;
   sent_emails : Toolkit.Verification_mailer.sent_mail list ref;
+  submission_queue : Toolkit.Submission_queue.t;
 }
 
 let base_config ?(auth_rate_limit_max_requests = 10) ?(rate_limit_max_requests = 100)
@@ -56,6 +58,12 @@ let base_config ?(auth_rate_limit_max_requests = 10) ?(rate_limit_max_requests =
     smtp_host = "127.0.0.1";
     smtp_port = 1025;
     mail_from = "no-reply@recognita.xyz";
+    rabbitmq_api_base_url = "http://rabbitmq:15672";
+    rabbitmq_user = "guest";
+    rabbitmq_password = "guest";
+    rabbitmq_vhost = "/";
+    rabbitmq_submission_queue = "submissions.pending";
+    submission_worker_poll_interval_seconds = 0.01;
   }
 
 let make_fixture ?(auth_rate_limit_max_requests = 10)
@@ -70,6 +78,7 @@ let make_fixture ?(auth_rate_limit_max_requests = 10)
     Toolkit.Verification_mailer.make_memory ~from_address:config.mail_from
       ~site_name:"Recognita" ()
   in
+  let submission_queue = Toolkit.Submission_queue.make_memory () in
   let rate_limiter =
     Toolkit.Rate_limiter.make ~clock
       ~auth_rule:
@@ -90,13 +99,14 @@ let make_fixture ?(auth_rate_limit_max_requests = 10)
         clock;
         rate_limiter;
         mailer;
+        submission_queue;
         with_repo = (fun _request handler -> handler repo);
       }
     in
     Toolkit.App.make app_config
   in
   let _ = clock_ref in
-  { app; repo; sent_emails }
+  { app; repo; clock; sent_emails; submission_queue }
 
 let request fixture ?(client = "127.0.0.1:55000") ?(headers = []) ?(body = "")
     ~meth ~target () =
@@ -117,6 +127,14 @@ let token_of_response response field =
 let user_id_of_response response =
   let json = response_json response in
   json |> member "user" |> member "id" |> to_int
+
+let task_id_of_response response =
+  let json = response_json response in
+  json |> member "task" |> member "id" |> to_int
+
+let submission_id_of_response response =
+  let json = response_json response in
+  json |> member "submission" |> member "id" |> to_int
 
 let unwrap_result map_error = function
   | Ok value -> value
@@ -160,6 +178,45 @@ let create_admin_user fixture ?(username = "admin")
        ~password_hash:(Toolkit.Password.make password)
        ~role:Toolkit.Domain.Admin ~created_at:1_700_000_000.)
   |> unwrap_repo_ok
+
+let login_admin fixture =
+  ignore (create_admin_user fixture ());
+  let response = login fixture "admin" "change-me-now" in
+  assert_status `OK response;
+  token_of_response response "access_token"
+
+let create_task fixture access_token
+    ?(title = "Mock task")
+    ?(description = "Task description")
+    ?(difficulty = 3)
+    ?(status = "PUBLISHED")
+    ?(visibility = "PUBLIC")
+    ?(config =
+      `Assoc
+        [
+          ("version", `Int 1);
+          ("grader", `Assoc [ ("kind", `String "mock") ]);
+        ])
+    () =
+  request fixture ~meth:`POST ~target:"/api/v1/tasks"
+    ~headers:
+      [
+        ("Authorization", "Bearer " ^ access_token);
+        ("Content-Type", "application/json");
+      ]
+    ~body:
+      (Yojson.Basic.to_string
+         (`Assoc
+           [
+             ("title", `String title);
+             ("description", `String description);
+             ("type", `String "MODEL_CONSTRUCTION");
+             ("difficulty", `Int difficulty);
+             ("config", config);
+             ("status", `String status);
+             ("visibility", `String visibility);
+           ]))
+    ()
 
 let verification_token_from_mail mail =
   match Uri.get_query_param (Uri.of_string mail.Toolkit.Verification_mailer.verification_url) "token" with
@@ -359,6 +416,93 @@ let test_health_and_openapi () =
   assert_true
     (String.length (response_body openapi) > 0)
     "OpenAPI document should not be empty"
+
+let test_admin_creates_task_and_public_list_exposes_it () =
+  let fixture = make_fixture () in
+  let admin_access = login_admin fixture in
+  let created_task = create_task fixture admin_access () in
+  assert_status `Created created_task;
+  let task_json = response_json created_task |> member "task" in
+  assert_true
+    (task_json |> member "type" |> to_string = "MODEL_CONSTRUCTION")
+    "Created task should expose the task type";
+  let listed = request fixture ~meth:`GET ~target:"/api/v1/tasks" () in
+  assert_status `OK listed;
+  let tasks = response_json listed |> member "tasks" |> to_list in
+  assert_true (List.length tasks = 1) "Public task list should include the new task"
+
+let test_submission_is_created_pending_and_worker_judges_it () =
+  let fixture = make_fixture () in
+  let admin_access = login_admin fixture in
+  let created_task = create_task fixture admin_access () in
+  assert_status `Created created_task;
+  let task_id = task_id_of_response created_task in
+  let registered =
+    register fixture "solver" "solver@example.com" "password123"
+  in
+  assert_status `Created registered;
+  let solver_access = token_of_response registered "access_token" in
+  let created_submission =
+    request fixture ~meth:`POST
+      ~target:(Printf.sprintf "/api/v1/tasks/%d/submissions" task_id)
+      ~headers:
+        [
+          ("Authorization", "Bearer " ^ solver_access);
+          ("Content-Type", "application/json");
+        ]
+      ~body:
+        (Yojson.Basic.to_string
+           (`Assoc [ ("data", `Assoc [ ("answer", `String "mock") ]) ]))
+      ()
+  in
+  assert_status `Created created_submission;
+  let created_submission_json =
+    response_json created_submission |> member "submission"
+  in
+  assert_true
+    (created_submission_json |> member "verdict" |> to_string = "PENDING")
+    "New submission should start as pending";
+  let submission_id = submission_id_of_response created_submission in
+  let worker_deps : Toolkit.Submission_worker.deps =
+    {
+      repo = fixture.repo;
+      queue = fixture.submission_queue;
+      clock = fixture.clock;
+    }
+  in
+  let processed =
+    Lwt_main.run (Toolkit.Submission_worker.process_next worker_deps)
+    |> unwrap_ok
+  in
+  assert_true processed "Worker should consume one queued submission";
+  let stored_submission =
+    Lwt_main.run (fixture.repo.find_submission_by_id submission_id)
+    |> unwrap_repo_ok
+  in
+  match stored_submission with
+  | Some submission ->
+      assert_true
+        (submission.verdict <> Toolkit.Domain.Pending)
+        "Worker should replace the pending verdict with a mock result";
+      assert_true
+        (submission.run_data <> None)
+        "Worker should persist mock run_data"
+  | None -> fail "Stored submission should still be queryable"
+
+let test_task_config_template_endpoint () =
+  let fixture = make_fixture () in
+  let response =
+    request fixture ~meth:`GET
+      ~target:"/api/v1/task-types/MODEL_CONSTRUCTION/config-template"
+      ()
+  in
+  assert_status `OK response;
+  let json = response_json response in
+  assert_true
+    (json |> member "config_template" |> member "grader" |> member "kind"
+   |> to_string
+    = "mock")
+    "Task config template endpoint should return the mock grader template"
 
 let web_config () : Toolkit.Web_config.t =
   {
@@ -584,6 +728,11 @@ let tests =
     ("non_admin_cannot_moderate", test_non_admin_cannot_moderate);
     ("rate_limit_blocks_auth_endpoint", test_rate_limit_blocks_auth_endpoint);
     ("health_and_openapi", test_health_and_openapi);
+    ( "admin_creates_task_and_public_list_exposes_it",
+      test_admin_creates_task_and_public_list_exposes_it );
+    ( "submission_is_created_pending_and_worker_judges_it",
+      test_submission_is_created_pending_and_worker_judges_it );
+    ("task_config_template_endpoint", test_task_config_template_endpoint);
     ( "web_requires_access_code_for_html_and_proxy",
       test_web_requires_access_code_for_html_and_proxy );
     ( "web_access_gate_rejects_fake_cookie_and_accepts_real_one",

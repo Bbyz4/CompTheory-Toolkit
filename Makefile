@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap up down logs ps rebuild build test shell run-api run-web local-up deploy-up local-down deploy-down local-logs deploy-logs deploy-cert
+.PHONY: help bootstrap up down logs ps rebuild build test shell run-api run-web run-worker local-up deploy-up local-down deploy-down local-logs deploy-logs deploy-cert
 
 DOCKER_CHECK := ./scripts/ensure_docker.sh
 
@@ -26,6 +26,7 @@ help:
 		'make shell      - open a shell in the dev environment' \
 		'make run-api    - run the API from source in the dev environment' \
 		'make run-web    - run the web app from source in the dev environment' \
+		'make run-worker - run the submission worker from source in the dev environment' \
 		'./bin/admincli  - run admin CLI without typing docker compose exec'
 
 bootstrap: up
@@ -91,3 +92,6 @@ run-api:
 
 run-web:
 	./bin/dev --service-ports dune exec apps/web/webapp.exe
+
+run-worker:
+	./bin/dev dune exec apps/worker/worker.exe

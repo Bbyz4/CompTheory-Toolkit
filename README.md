@@ -14,6 +14,7 @@ Po starcie:
 - OpenAPI: `http://localhost:8080/openapi.json`
 - web: `http://localhost:8081`
 - Mailpit: `http://localhost:8025`
+- RabbitMQ management: `http://localhost:15672`
 
 ## Przydatne komendy
 
@@ -25,10 +26,19 @@ make test
 make shell
 make run-api
 make run-web
+make run-worker
 ./bin/admincli list-users
 ./bin/admincli ban-user 2 --reason spam
 ./bin/admincli promote-admin 2
 ```
+
+## Tasks i submissions
+
+- `POST /api/v1/tasks` tworzy taska; endpoint jest tylko dla admina.
+- `GET /api/v1/tasks` zwraca publiczne, opublikowane taski.
+- `GET /api/v1/task-types/MODEL_CONSTRUCTION/config-template` zwraca template configu.
+- `POST /api/v1/tasks/:id/submissions` zapisuje zgłoszenie jako `PENDING` i publikuje je do kolejki RabbitMQ.
+- worker (`apps/worker/worker.exe`) odbiera submissiony z kolejki po kolei i zapisuje mockowy, losowy werdykt.
 
 ## Deploy
 

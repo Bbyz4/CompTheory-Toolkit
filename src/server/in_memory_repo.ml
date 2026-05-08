@@ -2,6 +2,8 @@ type state = {
   mutable next_user_id : int;
   mutable next_session_id : int;
   mutable next_verification_id : int;
+  mutable next_task_id : int;
+  mutable next_submission_id : int;
   users : (int, Domain.user) Hashtbl.t;
   usernames : (string, int) Hashtbl.t;
   emails : (string, int) Hashtbl.t;
@@ -10,6 +12,9 @@ type state = {
   refresh_index : (string, int) Hashtbl.t;
   verifications : (int, Domain.email_verification) Hashtbl.t;
   verification_tokens : (string, int) Hashtbl.t;
+  tasks : (int, Domain.task) Hashtbl.t;
+  task_slugs : (string, int) Hashtbl.t;
+  submissions : (int, Domain.submission) Hashtbl.t;
 }
 
 let create_state () =
@@ -17,6 +22,8 @@ let create_state () =
     next_user_id = 1;
     next_session_id = 1;
     next_verification_id = 1;
+    next_task_id = 1;
+    next_submission_id = 1;
     users = Hashtbl.create 16;
     usernames = Hashtbl.create 16;
     emails = Hashtbl.create 16;
@@ -25,6 +32,9 @@ let create_state () =
     refresh_index = Hashtbl.create 32;
     verifications = Hashtbl.create 32;
     verification_tokens = Hashtbl.create 32;
+    tasks = Hashtbl.create 32;
+    task_slugs = Hashtbl.create 32;
+    submissions = Hashtbl.create 64;
   }
 
 let make () =
@@ -32,6 +42,8 @@ let make () =
   let user_by_id id = Hashtbl.find_opt state.users id in
   let session_by_id id = Hashtbl.find_opt state.sessions id in
   let verification_by_id id = Hashtbl.find_opt state.verifications id in
+  let task_by_id id = Hashtbl.find_opt state.tasks id in
+  let submission_by_id id = Hashtbl.find_opt state.submissions id in
   let create_user ~username ~email ~password_hash ~role ~created_at =
     if Hashtbl.mem state.usernames username then
       Lwt.return (Error (Repository.Conflict "Username already exists"))
@@ -79,7 +91,7 @@ let make () =
           Int.compare left.Domain.id right.Domain.id)
         user_rows
     in
-    let users : Domain.public_user list =
+    let users =
       List.map
         (fun (user : Domain.user) -> Domain.public_user_of_user user)
         sorted_rows
@@ -91,7 +103,12 @@ let make () =
     | None -> Lwt.return (Ok None)
     | Some user ->
         let next_user =
-          { user with role; verified = user.verified || role = Domain.Admin; updated_at }
+          {
+            user with
+            role;
+            verified = user.verified || role = Domain.Admin;
+            updated_at;
+          }
         in
         Hashtbl.replace state.users user_id next_user;
         Lwt.return (Ok (Some next_user))
@@ -145,9 +162,9 @@ let make () =
   let revoke_user_sessions ~user_id ~revoked_at =
     Hashtbl.iter
       (fun session_id (session : Domain.session) ->
-        if session.Domain.user_id = user_id && session.Domain.revoked_at = None then
+        if session.user_id = user_id && session.revoked_at = None then
           Hashtbl.replace state.sessions session_id
-            { session with Domain.revoked_at = Some revoked_at })
+            { session with revoked_at = Some revoked_at })
       state.sessions;
     Lwt.return (Ok ())
   in
@@ -163,8 +180,8 @@ let make () =
       }
     in
     state.next_verification_id <- state.next_verification_id + 1;
-    Hashtbl.replace state.verifications verification.Domain.id verification;
-    Hashtbl.replace state.verification_tokens token verification.Domain.id;
+    Hashtbl.replace state.verifications verification.id verification;
+    Hashtbl.replace state.verification_tokens token verification.id;
     Lwt.return (Ok verification)
   in
   let find_email_verification_by_token token =
@@ -178,7 +195,7 @@ let make () =
     | None -> Lwt.return (Ok ())
     | Some verification ->
         Hashtbl.replace state.verifications verification_id
-          { verification with Domain.consumed_at = Some consumed_at };
+          { verification with consumed_at = Some consumed_at };
         Lwt.return (Ok ())
   in
   let mark_user_verified ~user_id ~updated_at =
@@ -188,6 +205,83 @@ let make () =
         let next_user = { user with verified = true; updated_at } in
         Hashtbl.replace state.users user_id next_user;
         Lwt.return (Ok (Some next_user))
+  in
+  let create_task ~title ~slug ~short_description ~description ~type_ ~author_id
+      ~difficulty ~config ~status ~visibility ~published_at ~created_at
+      ~updated_at =
+    match slug with
+    | Some value when Hashtbl.mem state.task_slugs value ->
+        Lwt.return (Error (Repository.Conflict "Task slug already exists"))
+    | _ ->
+        let task =
+          {
+            Domain.id = state.next_task_id;
+            title;
+            slug;
+            short_description;
+            description;
+            type_;
+            author_id;
+            difficulty;
+            config;
+            status;
+            visibility;
+            created_at;
+            updated_at;
+            published_at;
+          }
+        in
+        state.next_task_id <- state.next_task_id + 1;
+        Hashtbl.replace state.tasks task.id task;
+        begin
+          match slug with
+          | Some value -> Hashtbl.replace state.task_slugs value task.id
+          | None -> ()
+        end;
+        Lwt.return (Ok task)
+  in
+  let list_tasks () =
+    let rows : Domain.task list =
+      Hashtbl.to_seq_values state.tasks |> List.of_seq
+    in
+    let sorted_rows =
+      List.sort
+        (fun (left : Domain.task) (right : Domain.task) ->
+          Int.compare right.id left.id)
+        rows
+    in
+    Lwt.return (Ok sorted_rows)
+  in
+  let find_task_by_id task_id = Lwt.return (Ok (task_by_id task_id)) in
+  let create_submission ~task_id ~user_id ~data ~created_at =
+    let submission =
+      {
+        Domain.id = state.next_submission_id;
+        task_id;
+        user_id;
+        data;
+        verdict = Domain.Pending;
+        run_data = None;
+        created_at;
+        judged_at = None;
+      }
+    in
+    state.next_submission_id <- state.next_submission_id + 1;
+    Hashtbl.replace state.submissions submission.id submission;
+    Lwt.return (Ok submission)
+  in
+  let find_submission_by_id submission_id =
+    Lwt.return (Ok (submission_by_id submission_id))
+  in
+  let update_submission_result ~submission_id ~verdict ~run_data ~judged_at =
+    match submission_by_id submission_id with
+    | None -> Lwt.return (Ok None)
+    | Some submission ->
+        let next_submission =
+          { submission with verdict; run_data; judged_at = Some judged_at }
+        in
+        Hashtbl.replace state.submissions submission_id next_submission;
+        Lwt.return (Ok (Some next_submission))
   in
   {
     Repository.init_schema = (fun () -> Lwt.return (Ok ()));
@@ -207,4 +301,10 @@ let make () =
     find_email_verification_by_token;
     consume_email_verification;
     mark_user_verified;
+    create_task;
+    list_tasks;
+    find_task_by_id;
+    create_submission;
+    find_submission_by_id;
+    update_submission_result;
   }

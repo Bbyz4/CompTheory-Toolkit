@@ -18,6 +18,12 @@ x-app-env: &app-env
   SMTP_HOST: ${SMTP_HOST:-127.0.0.1}
   SMTP_PORT: ${SMTP_PORT:-1025}
   MAIL_FROM: ${MAIL_FROM:-no-reply@recognita.xyz}
+  RABBITMQ_API_BASE_URL: ${RABBITMQ_API_BASE_URL:-http://rabbitmq:15672}
+  RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+  RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+  RABBITMQ_SUBMISSION_QUEUE: ${RABBITMQ_SUBMISSION_QUEUE:-submissions.pending}
+  SUBMISSION_WORKER_POLL_INTERVAL_SECONDS: ${SUBMISSION_WORKER_POLL_INTERVAL_SECONDS:-1}
 
 x-web-env: &web-env
   APP_MODE: ${APP_MODE:-local}
@@ -45,10 +51,34 @@ services:
       timeout: 5s
       retries: 10
 
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   app:
     <<: *runtime-image
     depends_on:
       db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment: *app-env
+
+  worker:
+    <<: *runtime-image
+    command: ["/app/worker.exe"]
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     environment: *app-env
 

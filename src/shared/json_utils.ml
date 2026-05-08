@@ -25,8 +25,19 @@ let int_field json name =
   | `Int value -> Ok value
   | _ -> Error (App_error.Bad_request ("Field \"" ^ name ^ "\" must be an int"))
 
+let json_field json name =
+  match json |> member name with
+  | `Null ->
+      Error (App_error.Bad_request ("Field \"" ^ name ^ "\" is required"))
+  | value -> Ok value
+
+let object_field json name =
+  match json |> member name with
+  | `Assoc _ as value -> Ok value
+  | _ ->
+      Error (App_error.Bad_request ("Field \"" ^ name ^ "\" must be an object"))
+
 let assoc_list json =
   match json with
   | `Assoc _ -> Ok json
   | _ -> Error (App_error.Bad_request "JSON body must be an object")
-

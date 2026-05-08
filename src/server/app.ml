@@ -8,6 +8,7 @@ type t = {
   clock : Clock.t;
   rate_limiter : Rate_limiter.t;
   mailer : Verification_mailer.t;
+  submission_queue : Submission_queue.t;
   with_repo : with_repo;
 }
 
@@ -50,6 +51,21 @@ let users_json users =
 
 let user_json user = `Assoc [ ("user", Domain.public_user_to_yojson user) ]
 
+let tasks_json tasks =
+  `Assoc [ ("tasks", `List (List.map Domain.task_to_yojson tasks)) ]
+
+let task_json task = `Assoc [ ("task", Domain.task_to_yojson task) ]
+
+let submission_json submission =
+  `Assoc [ ("submission", Domain.submission_to_yojson submission) ]
+
+let task_config_template_json task_type =
+  `Assoc
+    [
+      ("task_type", `String (Domain.task_type_to_string task_type));
+      ("config_template", Task_config.config_template_json task_type);
+    ]
+
 let parse_body request =
   let* body = Dream.body request in
   match Json_utils.parse body with
@@ -66,6 +82,53 @@ let deps repo app : Auth_service.deps =
   { repo; clock = app.clock; config = app.config; mailer = app.mailer }
 
 let with_deps app request fn = app.with_repo request (fun repo -> fn (deps repo app))
+
+let task_deps repo app : Task_service.deps =
+  { repo; clock = app.clock; queue = app.submission_queue }
+
+let with_task_deps app request fn =
+  app.with_repo request (fun repo -> fn (task_deps repo app))
+
+let optional_access_token_from_request request =
+  match Dream.header request "authorization" with
+  | Some value when Util.starts_with ~prefix:"Bearer " value ->
+      Some (String.sub value 7 (String.length value - 7))
+  | _ -> None
+
+let optional_context auth_deps request =
+  match optional_access_token_from_request request with
+  | None -> Lwt.return (Ok None)
+  | Some access_token ->
+      let* result = Auth_service.authenticate_access_token auth_deps access_token in
+      match result with
+      | Ok context -> Lwt.return (Ok (Some context))
+      | Error _ -> Lwt.return (Ok None)
+
+let task_type_from_json json =
+  match Json_utils.string_field json "type" with
+  | Error app_error -> Error app_error
+  | Ok value -> (
+      match Domain.task_type_of_string value with
+      | Some task_type -> Ok task_type
+      | None -> Error (App_error.Bad_request "Unknown task type"))
+
+let task_status_from_json json =
+  match Json_utils.optional_string_field json "status" with
+  | Error app_error -> Error app_error
+  | Ok None -> Ok Domain.Draft
+  | Ok (Some value) -> (
+      match Domain.task_status_of_string value with
+      | Some status -> Ok status
+      | None -> Error (App_error.Bad_request "Unknown task status"))
+
+let task_visibility_from_json json =
+  match Json_utils.optional_string_field json "visibility" with
+  | Error app_error -> Error app_error
+  | Ok None -> Ok Domain.Private
+  | Ok (Some value) -> (
+      match Domain.task_visibility_of_string value with
+      | Some visibility -> Ok visibility
+      | None -> Error (App_error.Bad_request "Unknown task visibility"))
 
 let ratelimit_headers (decision : Rate_limiter.decision) =
   [
@@ -258,6 +321,145 @@ let make app =
                 | Ok user -> json_response ~code:200 (user_json user)
                 | Error app_error -> error_response app_error)))
   in
+  let handle_tasks request =
+    with_task_deps app request (fun task_deps ->
+        let* result = Task_service.list_public_tasks task_deps in
+        match result with
+        | Ok tasks -> json_response ~code:200 (tasks_json tasks)
+        | Error app_error -> error_response app_error)
+  in
+  let handle_task request =
+    app.with_repo request (fun repo ->
+        let auth_deps = deps repo app in
+        let current_task_deps = task_deps repo app in
+        match int_of_string_opt (Dream.param request "id") with
+        | None -> error_response (App_error.Bad_request "Task id must be an integer")
+        | Some task_id ->
+            let* viewer_result = optional_context auth_deps request in
+            begin
+              match viewer_result with
+              | Error app_error -> error_response app_error
+              | Ok viewer -> (
+                  let* result =
+                    Task_service.get_task current_task_deps ~viewer ~task_id
+                  in
+                  match result with
+                  | Ok task -> json_response ~code:200 (task_json task)
+                  | Error app_error -> error_response app_error)
+            end)
+  in
+  let handle_create_task request =
+    app.with_repo request (fun repo ->
+        let auth_deps = deps repo app in
+        let current_task_deps = task_deps repo app in
+        match access_token_from_request request with
+        | Error app_error -> error_response app_error
+        | Ok access_token -> (
+            let* admin_result = Auth_service.ensure_admin auth_deps ~access_token in
+            match admin_result with
+            | Error app_error -> error_response app_error
+            | Ok admin_context ->
+                let* json_result = parse_body request in
+                match json_result with
+                | Error app_error -> error_response app_error
+                | Ok json -> (
+                    match
+                      Json_utils.assoc_list json,
+                      Json_utils.string_field json "title",
+                      Json_utils.optional_string_field json "slug",
+                      Json_utils.optional_string_field json "short_description",
+                      Json_utils.string_field json "description",
+                      task_type_from_json json,
+                      Json_utils.int_field json "difficulty",
+                      Json_utils.object_field json "config",
+                      task_status_from_json json,
+                      task_visibility_from_json json
+                    with
+                    | Ok _, Ok title, Ok slug, Ok short_description, Ok description, Ok type_, Ok difficulty, Ok config, Ok status, Ok visibility -> (
+                        let* result =
+                          Task_service.create_task current_task_deps
+                            ~admin_context ~title ~slug ~short_description
+                            ~description ~type_ ~difficulty ~config ~status
+                            ~visibility
+                        in
+                        match result with
+                        | Ok task -> json_response ~code:201 (task_json task)
+                        | Error app_error -> error_response app_error)
+                    | Error app_error, _, _, _, _, _, _, _, _, _
+                    | _, Error app_error, _, _, _, _, _, _, _, _
+                    | _, _, Error app_error, _, _, _, _, _, _, _
+                    | _, _, _, Error app_error, _, _, _, _, _, _
+                    | _, _, _, _, Error app_error, _, _, _, _, _
+                    | _, _, _, _, _, Error app_error, _, _, _, _
+                    | _, _, _, _, _, _, Error app_error, _, _, _
+                    | _, _, _, _, _, _, _, Error app_error, _, _
+                    | _, _, _, _, _, _, _, _, Error app_error, _
+                    | _, _, _, _, _, _, _, _, _, Error app_error ->
+                        error_response app_error)))
+  in
+  let handle_task_config_template request =
+    match Domain.task_type_of_string (Dream.param request "type") with
+    | None -> error_response (App_error.Bad_request "Unknown task type")
+    | Some task_type ->
+        json_response ~code:200 (task_config_template_json task_type)
+  in
+  let handle_create_submission request =
+    app.with_repo request (fun repo ->
+        let auth_deps = deps repo app in
+        let current_task_deps = task_deps repo app in
+        match access_token_from_request request, int_of_string_opt (Dream.param request "id") with
+        | Error app_error, _ -> error_response app_error
+        | _, None ->
+            error_response (App_error.Bad_request "Task id must be an integer")
+        | Ok access_token, Some task_id -> (
+            let* context_result =
+              Auth_service.authenticate_access_token auth_deps access_token
+            in
+            match context_result with
+            | Error app_error -> error_response app_error
+            | Ok context ->
+                let* json_result = parse_body request in
+                match json_result with
+                | Error app_error -> error_response app_error
+                | Ok json -> (
+                    match Json_utils.assoc_list json, Json_utils.object_field json "data" with
+                    | Ok _, Ok data -> (
+                        let* result =
+                          Task_service.create_submission current_task_deps
+                            ~context ~task_id ~data
+                        in
+                        match result with
+                        | Ok submission ->
+                            json_response ~code:201 (submission_json submission)
+                        | Error app_error -> error_response app_error)
+                    | Error app_error, _ | _, Error app_error ->
+                        error_response app_error)))
+  in
+  let handle_submission request =
+    app.with_repo request (fun repo ->
+        let auth_deps = deps repo app in
+        let current_task_deps = task_deps repo app in
+        match access_token_from_request request, int_of_string_opt (Dream.param request "id") with
+        | Error app_error, _ -> error_response app_error
+        | _, None ->
+            error_response
+              (App_error.Bad_request "Submission id must be an integer")
+        | Ok access_token, Some submission_id -> (
+            let* context_result =
+              Auth_service.authenticate_access_token auth_deps access_token
+            in
+            match context_result with
+            | Error app_error -> error_response app_error
+            | Ok context -> (
+                let* result =
+                  Task_service.get_submission current_task_deps ~context
+                    ~submission_id
+                in
+                match result with
+                | Ok submission ->
+                    json_response ~code:200 (submission_json submission)
+                | Error app_error -> error_response app_error)))
+  in
   Dream.router
     [
       Dream.get "/health" (fun _request ->
@@ -281,6 +483,12 @@ let make app =
         Dream.get "/users" handle_users;
         Dream.post "/users/:id/ban" handle_ban;
         Dream.post "/users/:id/unban" handle_unban;
+        Dream.get "/task-types/:type/config-template" handle_task_config_template;
+        Dream.get "/tasks" handle_tasks;
+        Dream.get "/tasks/:id" handle_task;
+        Dream.post "/tasks" handle_create_task;
+        Dream.post "/tasks/:id/submissions" handle_create_submission;
+        Dream.get "/submissions/:id" handle_submission;
       ];
     ]
   |> rate_limit_middleware app
