@@ -859,6 +859,10 @@ module Q = struct
     Caqti_type.(int ->? string)
       ("SELECT " ^ task_json ^ " FROM tasks WHERE id = ?")
 
+  let find_task_by_slug =
+    Caqti_type.(string ->? string)
+      ("SELECT " ^ task_json ^ " FROM tasks WHERE slug = ?")
+
   let create_submission =
     Caqti_type.(tup4 int int string float ->! string)
       ({|
@@ -877,6 +881,45 @@ module Q = struct
   let find_submission_by_id =
     Caqti_type.(int ->? string)
       ("SELECT " ^ submission_json ^ " FROM submissions WHERE id = ?")
+
+  let list_submissions =
+    Caqti_type.(unit ->! string)
+      ({|
+        SELECT COALESCE(
+          json_agg(payload ORDER BY created_at_epoch DESC)::text,
+          '[]'
+        )
+        FROM (
+          SELECT
+            EXTRACT(EPOCH FROM created_at) AS created_at_epoch,
+      |}
+      ^ submission_json
+      ^ {|
+              AS payload
+          FROM submissions
+          ORDER BY created_at DESC
+        ) ordered_submissions
+      |})
+
+  let list_submissions_by_user =
+    Caqti_type.(int ->! string)
+      ({|
+        SELECT COALESCE(
+          json_agg(payload ORDER BY created_at_epoch DESC)::text,
+          '[]'
+        )
+        FROM (
+          SELECT
+            EXTRACT(EPOCH FROM created_at) AS created_at_epoch,
+      |}
+      ^ submission_json
+      ^ {|
+              AS payload
+          FROM submissions
+          WHERE user_id = ?
+          ORDER BY created_at DESC
+        ) ordered_submissions
+      |})
 
   let update_submission_result =
     Caqti_type.(tup4 string (option string) float int ->? string)
@@ -1100,6 +1143,24 @@ let parse_task_list json_text =
     | _ -> Error (Repository.Storage "Expected a JSON array for tasks list")
   with exn ->
     Error (Repository.Storage ("Failed to decode tasks JSON: " ^ pp_exn exn))
+
+let parse_submission_list json_text =
+  try
+    let json = Yojson.Basic.from_string json_text in
+    match json with
+    | `List items ->
+        let rec loop acc = function
+          | [] -> Ok (List.rev acc)
+          | item :: rest -> (
+              match parse_submission (Yojson.Basic.to_string item) with
+              | Ok parsed -> loop (parsed :: acc) rest
+              | Error _ as error -> error)
+        in
+        loop [] items
+    | _ -> Error (Repository.Storage "Expected a JSON array for submissions list")
+  with exn ->
+    Error
+      (Repository.Storage ("Failed to decode submissions JSON: " ^ pp_exn exn))
 
 let make (db : Caqti_lwt.connection) =
   let module Db = (val db : Caqti_lwt.CONNECTION) in
@@ -1349,6 +1410,14 @@ let make (db : Caqti_lwt.connection) =
       | Ok (Some json) -> Result.map Option.some (parse_task json)
       | Error error -> Error (map_caqti_error error))
   in
+  let find_task_by_slug slug =
+    let* result = Db.find_opt Q.find_task_by_slug slug in
+    Lwt.return
+      (match result with
+      | Ok None -> Ok None
+      | Ok (Some json) -> Result.map Option.some (parse_task json)
+      | Error error -> Error (map_caqti_error error))
+  in
   let create_submission ~task_id ~user_id ~data ~created_at =
     let* result =
       Db.find Q.create_submission
@@ -1357,6 +1426,20 @@ let make (db : Caqti_lwt.connection) =
     Lwt.return
       (match result with
       | Ok json -> parse_submission json
+      | Error error -> Error (map_caqti_error error))
+  in
+  let list_submissions () =
+    let* result = Db.find Q.list_submissions () in
+    Lwt.return
+      (match result with
+      | Ok json -> parse_submission_list json
+      | Error error -> Error (map_caqti_error error))
+  in
+  let list_submissions_by_user ~user_id =
+    let* result = Db.find Q.list_submissions_by_user user_id in
+    Lwt.return
+      (match result with
+      | Ok json -> parse_submission_list json
       | Error error -> Error (map_caqti_error error))
   in
   let find_submission_by_id submission_id =
@@ -1407,7 +1490,10 @@ let make (db : Caqti_lwt.connection) =
     create_task;
     list_tasks;
     find_task_by_id;
+    find_task_by_slug;
     create_submission;
+    list_submissions;
+    list_submissions_by_user;
     find_submission_by_id;
     update_submission_result;
   }

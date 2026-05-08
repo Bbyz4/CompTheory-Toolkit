@@ -59,6 +59,13 @@ let task_json task = `Assoc [ ("task", Domain.task_to_yojson task) ]
 let submission_json submission =
   `Assoc [ ("submission", Domain.submission_to_yojson submission) ]
 
+let submissions_json submissions =
+  `Assoc
+    [
+      ( "submissions",
+        `List (List.map Domain.submission_to_yojson submissions) );
+    ]
+
 let task_config_template_json task_type =
   `Assoc
     [
@@ -71,6 +78,13 @@ let parse_body request =
   match Json_utils.parse body with
   | Ok json -> Lwt.return (Ok json)
   | Error app_error -> Lwt.return (Error app_error)
+
+let first_value = function [] -> None | value :: _ -> Some value
+
+let query_value request name =
+  match Dream.target request |> Uri.of_string |> Uri.query |> List.assoc_opt name with
+  | Some values -> first_value values
+  | None -> None
 
 let access_token_from_request request =
   match Dream.header request "authorization" with
@@ -129,6 +143,12 @@ let task_visibility_from_json json =
       match Domain.task_visibility_of_string value with
       | Some visibility -> Ok visibility
       | None -> Error (App_error.Bad_request "Unknown task visibility"))
+
+let submission_scope_from_request request =
+  match query_value request "scope" with
+  | Some "all" -> Task_service.All
+  | Some "mine" | None -> Task_service.Mine
+  | Some _ -> Task_service.Mine
 
 let ratelimit_headers (decision : Rate_limiter.decision) =
   [
@@ -348,6 +368,24 @@ let make app =
                   | Error app_error -> error_response app_error)
             end)
   in
+  let handle_task_by_slug request =
+    app.with_repo request (fun repo ->
+        let auth_deps = deps repo app in
+        let current_task_deps = task_deps repo app in
+        let* viewer_result = optional_context auth_deps request in
+        begin
+          match viewer_result with
+          | Error app_error -> error_response app_error
+          | Ok viewer -> (
+              let* result =
+                Task_service.get_task_by_slug current_task_deps ~viewer
+                  ~slug:(Dream.param request "slug")
+              in
+              match result with
+              | Ok task -> json_response ~code:200 (task_json task)
+              | Error app_error -> error_response app_error)
+        end)
+  in
   let handle_create_task request =
     app.with_repo request (fun repo ->
         let auth_deps = deps repo app in
@@ -460,6 +498,28 @@ let make app =
                     json_response ~code:200 (submission_json submission)
                 | Error app_error -> error_response app_error)))
   in
+  let handle_submissions request =
+    app.with_repo request (fun repo ->
+        let auth_deps = deps repo app in
+        let current_task_deps = task_deps repo app in
+        match access_token_from_request request with
+        | Error app_error -> error_response app_error
+        | Ok access_token -> (
+            let* context_result =
+              Auth_service.authenticate_access_token auth_deps access_token
+            in
+            match context_result with
+            | Error app_error -> error_response app_error
+            | Ok context -> (
+                let* result =
+                  Task_service.list_submissions current_task_deps ~context
+                    ~scope:(submission_scope_from_request request)
+                in
+                match result with
+                | Ok submissions ->
+                    json_response ~code:200 (submissions_json submissions)
+                | Error app_error -> error_response app_error)))
+  in
   Dream.router
     [
       Dream.get "/health" (fun _request ->
@@ -486,8 +546,10 @@ let make app =
         Dream.get "/task-types/:type/config-template" handle_task_config_template;
         Dream.get "/tasks" handle_tasks;
         Dream.get "/tasks/:id" handle_task;
+        Dream.get "/tasks/slug/:slug" handle_task_by_slug;
         Dream.post "/tasks" handle_create_task;
         Dream.post "/tasks/:id/submissions" handle_create_submission;
+        Dream.get "/submissions" handle_submissions;
         Dream.get "/submissions/:id" handle_submission;
       ];
     ]

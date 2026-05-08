@@ -253,6 +253,11 @@ let make () =
     Lwt.return (Ok sorted_rows)
   in
   let find_task_by_id task_id = Lwt.return (Ok (task_by_id task_id)) in
+  let find_task_by_slug slug =
+    match Hashtbl.find_opt state.task_slugs slug with
+    | None -> Lwt.return (Ok None)
+    | Some task_id -> Lwt.return (Ok (task_by_id task_id))
+  in
   let create_submission ~task_id ~user_id ~data ~created_at =
     let submission =
       {
@@ -269,6 +274,32 @@ let make () =
     state.next_submission_id <- state.next_submission_id + 1;
     Hashtbl.replace state.submissions submission.id submission;
     Lwt.return (Ok submission)
+  in
+  let list_submissions () =
+    let rows : Domain.submission list =
+      Hashtbl.to_seq_values state.submissions |> List.of_seq
+    in
+    let sorted_rows =
+      List.sort
+        (fun (left : Domain.submission) (right : Domain.submission) ->
+          Int.compare right.id left.id)
+        rows
+    in
+    Lwt.return (Ok sorted_rows)
+  in
+  let list_submissions_by_user ~user_id =
+    match Hashtbl.to_seq_values state.submissions |> List.of_seq with
+    | rows ->
+        let filtered_rows =
+          rows
+          |> List.filter
+               (fun (submission : Domain.submission) ->
+                 submission.user_id = user_id)
+          |> List.sort
+               (fun (left : Domain.submission) (right : Domain.submission) ->
+                 Int.compare right.id left.id)
+        in
+        Lwt.return (Ok filtered_rows)
   in
   let find_submission_by_id submission_id =
     Lwt.return (Ok (submission_by_id submission_id))
@@ -304,7 +335,10 @@ let make () =
     create_task;
     list_tasks;
     find_task_by_id;
+    find_task_by_slug;
     create_submission;
+    list_submissions;
+    list_submissions_by_user;
     find_submission_by_id;
     update_submission_result;
   }

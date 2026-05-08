@@ -36,17 +36,17 @@ let template =
     <title>__SITE_NAME__</title>
     <style>
       :root {
-        --paper: #f5efe7;
-        --paper-strong: #fffaf4;
+        --paper: #f4efe7;
+        --paper-strong: #fffaf3;
         --ink: #1f2a30;
-        --muted: #5e6a71;
+        --muted: #627078;
         --line: rgba(31, 42, 48, 0.12);
-        --accent: #b56c3f;
-        --accent-soft: rgba(181, 108, 63, 0.14);
-        --mist: #dfe8e2;
-        --success: #3f7a58;
-        --danger: #a64840;
-        --shadow: 0 24px 60px rgba(24, 31, 36, 0.14);
+        --accent: #bb6d3f;
+        --accent-soft: rgba(187, 109, 63, 0.12);
+        --mist: #e6ece6;
+        --success: #40785a;
+        --danger: #a34842;
+        --shadow: 0 24px 60px rgba(24, 31, 36, 0.12);
       }
 
       * {
@@ -59,268 +59,347 @@ let template =
         font-family: "Avenir Next", "Segoe UI", sans-serif;
         color: var(--ink);
         background:
-          radial-gradient(circle at top left, rgba(181, 108, 63, 0.15), transparent 32%),
-          radial-gradient(circle at bottom right, rgba(101, 132, 118, 0.18), transparent 26%),
-          linear-gradient(180deg, #f8f2eb 0%, #f3ede6 100%);
+          radial-gradient(circle at top left, rgba(187, 109, 63, 0.14), transparent 28%),
+          radial-gradient(circle at bottom right, rgba(64, 120, 90, 0.14), transparent 24%),
+          linear-gradient(180deg, #f7f2eb 0%, #f3ede6 100%);
       }
 
-      .shell {
-        min-height: 100vh;
+      a,
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      .page {
+        width: min(1180px, calc(100% - 32px));
+        margin: 22px auto 42px;
+      }
+
+      .topbar {
         display: flex;
         align-items: center;
-        justify-content: center;
-        padding: 40px 20px;
-      }
-
-      .frame {
-        width: min(1120px, 100%);
-        min-height: 720px;
-        display: grid;
-        grid-template-columns: 1.1fr 0.9fr;
-        border: 1px solid var(--line);
-        border-radius: 32px;
-        overflow: hidden;
-        background: rgba(255, 250, 244, 0.85);
-        backdrop-filter: blur(16px);
-        box-shadow: var(--shadow);
-      }
-
-      .hero {
-        position: relative;
-        padding: 54px 56px;
-        display: flex;
-        flex-direction: column;
         justify-content: space-between;
-        background:
-          linear-gradient(155deg, rgba(255, 250, 244, 0.95), rgba(236, 230, 220, 0.8)),
-          linear-gradient(45deg, rgba(181, 108, 63, 0.06), rgba(67, 122, 88, 0.08));
+        gap: 16px;
+        margin-bottom: 18px;
+        padding: 18px 22px;
+        border-radius: 24px;
+        border: 1px solid var(--line);
+        background: rgba(255, 251, 247, 0.86);
+        box-shadow: 0 18px 40px rgba(24, 31, 36, 0.08);
+        backdrop-filter: blur(14px);
       }
 
-      .hero::after {
-        content: "";
-        position: absolute;
-        inset: auto -90px -120px auto;
-        width: 300px;
-        height: 300px;
-        border-radius: 999px;
-        background: rgba(181, 108, 63, 0.08);
-        filter: blur(8px);
+      .brand-block {
+        display: grid;
+        gap: 6px;
       }
 
-      .badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        width: fit-content;
-        padding: 10px 14px;
-        border-radius: 999px;
-        border: 1px solid rgba(31, 42, 48, 0.08);
-        background: rgba(255, 255, 255, 0.55);
-        color: var(--muted);
-        font-size: 13px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      .dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 999px;
-        background: var(--success);
-        box-shadow: 0 0 0 6px rgba(63, 122, 88, 0.12);
-      }
-
-      h1 {
-        margin: 0 0 20px;
+      .brand {
+        margin: 0;
         font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
-        font-size: clamp(3rem, 6vw, 5.2rem);
+        font-size: 2rem;
         line-height: 0.95;
-        font-weight: 600;
         letter-spacing: -0.04em;
       }
 
-      .lead {
-        max-width: 460px;
-        font-size: 1.08rem;
-        line-height: 1.75;
+      .brand-subtitle {
         color: var(--muted);
+        font-size: 0.96rem;
       }
 
-      .hero-foot {
-        display: grid;
-        gap: 18px;
-      }
-
-      .metric {
-        width: fit-content;
-        padding: 16px 18px;
-        border-radius: 20px;
-        background: rgba(255, 255, 255, 0.58);
-        border: 1px solid rgba(31, 42, 48, 0.08);
-      }
-
-      .metric-label {
-        color: var(--muted);
-        font-size: 13px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      .metric-value {
-        margin-top: 6px;
-        font-size: 1.3rem;
-        font-weight: 600;
-      }
-
-      .panel {
-        padding: 34px;
+      .topbar-actions {
         display: flex;
-        align-items: stretch;
-        justify-content: center;
-        background: linear-gradient(180deg, rgba(249, 245, 239, 0.9), rgba(255, 255, 255, 0.96));
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        flex-wrap: wrap;
       }
 
-      .card {
-        width: min(460px, 100%);
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        border-radius: 28px;
-        border: 1px solid rgba(31, 42, 48, 0.08);
-        background: rgba(255, 255, 255, 0.86);
-        box-shadow: 0 18px 40px rgba(24, 31, 36, 0.08);
-        overflow: hidden;
-      }
-
-      .card-head {
+      .nav-row {
         display: flex;
         gap: 10px;
-        padding: 16px;
-        background: rgba(245, 239, 231, 0.72);
-        border-bottom: 1px solid var(--line);
+        flex-wrap: wrap;
       }
 
-      .tab {
-        flex: 1;
-        border: 0;
-        border-radius: 16px;
-        padding: 13px 16px;
-        font: inherit;
-        font-size: 0.95rem;
-        font-weight: 600;
-        color: var(--muted);
-        background: transparent;
-        cursor: pointer;
-        transition: 180ms ease;
-      }
-
-      .tab.active {
-        color: var(--ink);
-        background: white;
-        box-shadow: 0 8px 20px rgba(24, 31, 36, 0.08);
-      }
-
-      .pane {
-        display: none;
-        padding: 26px 26px 30px;
-      }
-
-      .pane.active {
-        display: block;
-      }
-
-      .eyebrow {
-        color: var(--muted);
-        font-size: 0.9rem;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-      }
-
-      h2 {
-        margin: 8px 0 10px;
-        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
-        font-size: 2rem;
-        line-height: 1.05;
-        font-weight: 600;
-      }
-
-      .subtle {
-        margin: 0 0 22px;
-        color: var(--muted);
-        line-height: 1.7;
-      }
-
-      form {
-        display: grid;
-        gap: 14px;
-      }
-
-      label {
-        display: grid;
-        gap: 8px;
-        color: var(--muted);
-        font-size: 0.95rem;
-      }
-
-      input {
-        width: 100%;
-        border: 1px solid rgba(31, 42, 48, 0.1);
-        border-radius: 16px;
-        background: rgba(255, 251, 247, 0.9);
-        padding: 15px 16px;
-        font: inherit;
-        font-size: 1rem;
-        color: var(--ink);
-        outline: none;
-        transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
-      }
-
-      input:focus {
-        border-color: rgba(181, 108, 63, 0.6);
-        box-shadow: 0 0 0 4px rgba(181, 108, 63, 0.12);
-        transform: translateY(-1px);
-      }
-
-      .primary,
+      .nav-link,
       .ghost,
-      .danger {
+      .primary,
+      .danger,
+      .soft {
         border: 0;
         border-radius: 16px;
-        padding: 14px 18px;
-        font: inherit;
-        font-weight: 600;
-        cursor: pointer;
-        transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+        padding: 12px 16px;
+        transition: transform 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
+      }
+
+      .nav-link,
+      .ghost,
+      .soft {
+        background: rgba(255, 255, 255, 0.72);
+        color: var(--ink);
+        border: 1px solid rgba(31, 42, 48, 0.1);
+      }
+
+      .nav-link.active {
+        background: var(--ink);
+        color: white;
+        box-shadow: 0 12px 22px rgba(31, 42, 48, 0.18);
       }
 
       .primary {
         background: var(--ink);
         color: white;
-        box-shadow: 0 14px 24px rgba(31, 42, 48, 0.18);
-      }
-
-      .ghost {
-        background: transparent;
-        color: var(--ink);
-        border: 1px solid rgba(31, 42, 48, 0.12);
+        box-shadow: 0 14px 28px rgba(31, 42, 48, 0.16);
       }
 
       .danger {
-        background: rgba(166, 72, 64, 0.09);
+        background: rgba(163, 72, 66, 0.12);
         color: var(--danger);
       }
 
-      .primary:hover,
+      .nav-link:hover,
       .ghost:hover,
-      .danger:hover {
+      .primary:hover,
+      .danger:hover,
+      .soft:hover {
         transform: translateY(-1px);
       }
 
-      .message {
-        min-height: 24px;
-        margin-top: 10px;
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .role-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(31, 42, 48, 0.08);
+        color: var(--ink);
+        font-size: 0.84rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .role-pill.admin {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .shell {
+        border-radius: 32px;
+        border: 1px solid var(--line);
+        background: rgba(255, 251, 247, 0.84);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(18px);
+        overflow: hidden;
+      }
+
+      .flash {
+        display: none;
+        margin: 0;
+        padding: 16px 22px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.62);
+        color: var(--ink);
+      }
+
+      .flash.visible {
+        display: block;
+      }
+
+      .flash.error {
+        color: var(--danger);
+        background: rgba(163, 72, 66, 0.08);
+      }
+
+      .flash.success {
+        color: var(--success);
+        background: rgba(64, 120, 90, 0.08);
+      }
+
+      .view {
+        display: none;
+        padding: 28px;
+      }
+
+      .view.active {
+        display: block;
+      }
+
+      .home-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.9fr);
+        gap: 24px;
+      }
+
+      .card {
+        border-radius: 28px;
+        border: 1px solid rgba(31, 42, 48, 0.08);
+        background: rgba(255, 255, 255, 0.76);
+        padding: 24px;
+      }
+
+      .section-eyebrow {
         color: var(--muted);
-        font-size: 0.95rem;
+        font-size: 0.82rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+        line-height: 1.02;
+        letter-spacing: -0.03em;
+      }
+
+      .view h1 {
+        font-size: clamp(2.2rem, 5vw, 3.4rem);
+      }
+
+      .view h2 {
+        font-size: clamp(1.7rem, 3.5vw, 2.4rem);
+      }
+
+      .lead,
+      .subtle,
+      .meta-line {
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .filters {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin: 22px 0 18px;
+      }
+
+      label.filter {
+        display: grid;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        border: 1px solid rgba(31, 42, 48, 0.12);
+        border-radius: 16px;
+        background: rgba(255, 253, 249, 0.92);
+        padding: 14px 15px;
+        color: var(--ink);
+        outline: none;
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+        border-color: rgba(187, 109, 63, 0.6);
+        box-shadow: 0 0 0 4px rgba(187, 109, 63, 0.12);
+      }
+
+      .task-list,
+      .submission-list,
+      .users-list {
+        display: grid;
+        gap: 14px;
+      }
+
+      .task-item,
+      .submission-item,
+      .user-item {
+        display: grid;
+        gap: 14px;
+        padding: 18px 20px;
+        border-radius: 22px;
+        border: 1px solid rgba(31, 42, 48, 0.08);
+        background: rgba(255, 255, 255, 0.8);
+      }
+
+      .task-item {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+      }
+
+      .task-title,
+      .submission-title,
+      .user-name {
+        font-size: 1.08rem;
+        font-weight: 700;
+      }
+
+      .task-summary,
+      .submission-summary,
+      .user-summary {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        width: fit-content;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(31, 42, 48, 0.06);
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+
+      .tag.admin {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .tag.banned {
+        background: rgba(163, 72, 66, 0.12);
+        color: var(--danger);
+      }
+
+      .tag.pending {
+        background: rgba(31, 42, 48, 0.08);
+        color: var(--ink);
+      }
+
+      .tag.accepted {
+        background: rgba(64, 120, 90, 0.14);
+        color: var(--success);
+      }
+
+      .tag.rejected,
+      .tag.invalid-format,
+      .tag.internal-error {
+        background: rgba(163, 72, 66, 0.12);
+        color: var(--danger);
+      }
+
+      .empty {
+        padding: 26px 0 8px;
+        color: var(--muted);
+      }
+
+      .message {
+        min-height: 22px;
+        margin-top: 14px;
+        color: var(--muted);
       }
 
       .message.error {
@@ -331,336 +410,409 @@ let template =
         color: var(--success);
       }
 
-      .dashboard {
+      .auth-tabs {
+        display: flex;
+        gap: 10px;
+        margin: 18px 0 18px;
+      }
+
+      .auth-pane {
         display: none;
-        min-height: 100vh;
-        padding: 28px 20px 56px;
       }
 
-      .dashboard.active {
+      .auth-pane.active {
         display: block;
       }
 
-      .topbar {
-        width: min(1080px, 100%);
-        margin: 0 auto 24px;
-        padding: 18px 22px;
-        border-radius: 24px;
-        border: 1px solid var(--line);
-        background: rgba(255, 251, 247, 0.84);
-        backdrop-filter: blur(14px);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 14px;
-        box-shadow: 0 18px 40px rgba(24, 31, 36, 0.08);
-      }
-
-      .brand {
-        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
-        font-size: 1.8rem;
-        letter-spacing: -0.03em;
-      }
-
-      .role-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 12px;
-        border-radius: 999px;
-        background: var(--accent-soft);
-        color: var(--accent);
-        font-size: 0.84rem;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-      }
-
-      .dashboard-body {
-        width: min(1080px, 100%);
-        margin: 0 auto;
-      }
-
-      .panel-card {
-        border-radius: 28px;
-        border: 1px solid var(--line);
-        background: rgba(255, 251, 247, 0.88);
-        box-shadow: 0 20px 44px rgba(24, 31, 36, 0.08);
-        padding: 28px;
-      }
-
-      .panel-card h3 {
-        margin: 0;
-        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
-        font-size: 2rem;
-        font-weight: 600;
-      }
-
-      .panel-card p {
-        color: var(--muted);
-        line-height: 1.75;
-      }
-
-      .quote {
-        margin-top: 28px;
-        padding: 28px;
-        border-radius: 24px;
-        background: linear-gradient(180deg, rgba(250, 247, 242, 1), rgba(244, 237, 227, 0.82));
-        border: 1px solid rgba(31, 42, 48, 0.08);
-        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
-        font-style: italic;
-        font-size: clamp(1.6rem, 4vw, 2.5rem);
-        line-height: 1.35;
-        color: #3b312c;
-      }
-
-      .quote small {
-        display: block;
-        margin-top: 16px;
-        font-size: 1rem;
-        color: var(--muted);
-        font-style: normal;
-      }
-
-      .users {
+      form {
         display: grid;
         gap: 14px;
-        margin-top: 22px;
       }
 
-      .user-row {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 16px;
-        align-items: center;
-        padding: 18px 20px;
-        border-radius: 22px;
-        border: 1px solid rgba(31, 42, 48, 0.08);
-        background: rgba(255, 255, 255, 0.78);
-      }
-
-      .user-meta {
-        display: grid;
-        gap: 6px;
-      }
-
-      .user-name {
-        font-weight: 700;
-        font-size: 1.04rem;
-      }
-
-      .user-subline {
+      .meta-grid {
         display: flex;
+        gap: 10px;
         flex-wrap: wrap;
-        gap: 8px;
-        color: var(--muted);
+        margin: 18px 0 22px;
+      }
+
+      .description-box,
+      .json-box {
+        margin-top: 20px;
+        padding: 22px;
+        border-radius: 24px;
+        border: 1px solid rgba(31, 42, 48, 0.08);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 240, 232, 0.84));
+      }
+
+      .description-box {
+        white-space: pre-wrap;
+        line-height: 1.8;
+      }
+
+      .json-box {
+        overflow-x: auto;
+      }
+
+      pre {
+        margin: 0;
+        font-family: "SFMono-Regular", "Menlo", monospace;
         font-size: 0.92rem;
+        line-height: 1.65;
       }
 
-      .tag {
-        width: fit-content;
-        padding: 6px 10px;
-        border-radius: 999px;
-        background: rgba(31, 42, 48, 0.06);
+      .view-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 22px;
       }
 
-      .tag.admin {
-        background: rgba(181, 108, 63, 0.12);
-        color: var(--accent);
+      .inline-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
       }
 
-      .tag.banned {
-        background: rgba(166, 72, 64, 0.12);
-        color: var(--danger);
+      .sidebar-stack {
+        display: grid;
+        gap: 18px;
       }
 
-      .empty {
-        color: var(--muted);
-        padding: 22px 0 6px;
+      .quick-links {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 18px;
       }
 
       .loading {
-        opacity: 0.65;
+        opacity: 0.6;
         pointer-events: none;
       }
 
-      @media (max-width: 920px) {
-        .frame {
+      @media (max-width: 960px) {
+        .home-grid {
           grid-template-columns: 1fr;
         }
 
-        .hero {
-          min-height: 420px;
-          padding: 36px 28px;
-        }
-
-        .panel {
-          padding: 20px;
-        }
-
-        .topbar {
-          flex-direction: column;
-          align-items: flex-start;
+        .filters {
+          grid-template-columns: 1fr 1fr;
         }
       }
 
-      @media (max-width: 640px) {
-        .shell {
+      @media (max-width: 720px) {
+        .page {
+          width: min(100%, calc(100% - 20px));
+          margin: 10px auto 24px;
+        }
+
+        .topbar {
+          padding: 16px;
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .view {
           padding: 18px;
         }
 
-        .panel-card,
-        .card {
-          border-radius: 24px;
+        .filters {
+          grid-template-columns: 1fr;
         }
 
-        .hero {
-          min-height: auto;
-        }
-
-        .user-row {
+        .task-item {
           grid-template-columns: 1fr;
         }
       }
     </style>
   </head>
   <body>
-    <main id="auth-shell" class="shell">
-      <section class="frame">
-        <div class="hero">
-          <div>
-            <div class="badge"><span class="dot"></span> recognita.xyz</div>
-            <div style="height: 34px"></div>
-            <h1>__SITE_NAME__</h1>
-            <p class="lead">Sign in or create an account.</p>
+    <div class="page">
+      <header class="topbar">
+        <div class="brand-block">
+          <h1 class="brand">__SITE_NAME__</h1>
+          <div class="brand-subtitle">Comp theory tasks, queues, and submissions.</div>
+        </div>
+        <div class="topbar-actions">
+          <div class="nav-row">
+            <button id="nav-home" class="nav-link active" type="button">Tasks</button>
+            <button id="nav-submissions" class="nav-link" type="button" style="display:none;">My submissions</button>
+            <button id="nav-admin-submissions" class="nav-link" type="button" style="display:none;">Admin queue</button>
+          </div>
+          <div class="status-row">
+            <span id="role-pill" class="role-pill">Guest</span>
+            <button id="auth-shortcut" class="ghost" type="button">Sign in</button>
+            <button id="logout-button" class="ghost" type="button" style="display:none;">Sign out</button>
           </div>
         </div>
+      </header>
 
-        <div class="panel">
+      <main class="shell">
+        <div id="flash" class="flash"></div>
+
+        <section id="view-home" class="view active">
+          <div class="home-grid">
+            <div class="card">
+              <div class="section-eyebrow">Discover</div>
+              <div class="view-head" style="margin-top:10px;">
+                <div>
+                  <h2>Task explorer</h2>
+                  <p class="lead">Browse public tasks, filter them by type and difficulty, and open details by slug-backed URLs.</p>
+                </div>
+                <button id="refresh-tasks" class="ghost" type="button">Refresh tasks</button>
+              </div>
+
+              <div class="filters">
+                <label class="filter">
+                  Search title
+                  <input id="filter-query" placeholder="e.g. automata, pumping lemma" />
+                </label>
+                <label class="filter">
+                  Type
+                  <select id="filter-type">
+                    <option value="">All types</option>
+                  </select>
+                </label>
+                <label class="filter">
+                  Min difficulty
+                  <input id="filter-min-difficulty" type="number" min="0" max="10" placeholder="0" />
+                </label>
+                <label class="filter">
+                  Max difficulty
+                  <input id="filter-max-difficulty" type="number" min="0" max="10" placeholder="10" />
+                </label>
+              </div>
+
+              <div id="tasks-meta" class="meta-line"></div>
+              <div id="tasks-list" class="task-list"></div>
+            </div>
+
+            <div class="sidebar-stack">
+              <article id="auth-card" class="card">
+                <div class="section-eyebrow">Account</div>
+                <div id="signed-out-panel">
+                  <h3 style="margin-top:10px;">Sign in or register</h3>
+                  <p class="subtle">Tasks are visible to everyone inside the web app. Signing in unlocks submissions and queues.</p>
+
+                  <div class="auth-tabs">
+                    <button id="tab-signin" class="nav-link active" type="button">Sign in</button>
+                    <button id="tab-register" class="nav-link" type="button">Register</button>
+                  </div>
+
+                  <section id="pane-signin" class="auth-pane active">
+                    <form id="signin-form">
+                      <label>
+                        Username
+                        <input id="signin-username" autocomplete="username" required />
+                      </label>
+                      <label>
+                        Password
+                        <input id="signin-password" type="password" autocomplete="current-password" required />
+                      </label>
+                      <button class="primary" type="submit">Sign in</button>
+                    </form>
+                    <div id="signin-message" class="message"></div>
+                  </section>
+
+                  <section id="pane-register" class="auth-pane">
+                    <form id="register-form">
+                      <label>
+                        Username
+                        <input id="register-username" autocomplete="username" required />
+                      </label>
+                      <label>
+                        Email
+                        <input id="register-email" type="email" autocomplete="email" required />
+                      </label>
+                      <label>
+                        Password
+                        <input id="register-password" type="password" autocomplete="new-password" required />
+                      </label>
+                      <button class="primary" type="submit">Register</button>
+                    </form>
+                    <div id="register-message" class="message"></div>
+                  </section>
+                </div>
+
+                <div id="signed-in-panel" style="display:none;">
+                  <h3 id="session-title" style="margin-top:10px;">Signed in</h3>
+                  <p id="session-copy" class="subtle"></p>
+                  <div class="quick-links">
+                    <button id="sidebar-my-submissions" class="soft" type="button">My submissions</button>
+                    <button id="sidebar-admin-submissions" class="soft" type="button" style="display:none;">Admin queue</button>
+                  </div>
+                </div>
+              </article>
+
+              <article id="admin-users-panel" class="card" style="display:none;">
+                <div class="view-head" style="margin-top:0;">
+                  <div>
+                    <div class="section-eyebrow">Moderation</div>
+                    <h3 style="margin-top:10px;">Users</h3>
+                    <p class="subtle">A lightweight moderation panel stays available for admin users.</p>
+                  </div>
+                  <button id="refresh-users" class="ghost" type="button">Refresh users</button>
+                </div>
+                <div id="admin-message" class="message"></div>
+                <div id="users-list" class="users-list"></div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-verify" class="view">
           <div class="card">
-            <div class="card-head">
-              <button id="tab-signin" class="tab active" type="button">Sign in</button>
-              <button id="tab-register" class="tab" type="button">Register</button>
+            <div class="section-eyebrow">Email verification</div>
+            <div class="view-head" style="margin-top:10px;">
+              <div>
+                <h2>Verify your email</h2>
+                <p id="verify-copy" class="lead">Confirm your email address.</p>
+              </div>
+              <button id="verify-back" class="ghost" type="button">Back to tasks</button>
             </div>
-
-            <section id="pane-signin" class="pane active">
-              <div class="eyebrow">Welcome back</div>
-              <h2>Sign in to __SITE_NAME__</h2>
-              <form id="signin-form">
-                <label>
-                  Username
-                  <input id="signin-username" autocomplete="username" required />
-                </label>
-                <label>
-                  Password
-                  <input id="signin-password" type="password" autocomplete="current-password" required />
-                </label>
-                <button class="primary" type="submit">Sign in</button>
-              </form>
-              <div id="signin-message" class="message"></div>
-            </section>
-
-            <section id="pane-register" class="pane">
-              <div class="eyebrow">Fresh start</div>
-              <h2>Create your account</h2>
-              <form id="register-form">
-                <label>
-                  Username
-                  <input id="register-username" autocomplete="username" required />
-                </label>
-                <label>
-                  Email
-                  <input id="register-email" type="email" autocomplete="email" required />
-                </label>
-                <label>
-                  Password
-                  <input id="register-password" type="password" autocomplete="new-password" required />
-                </label>
-                <button class="primary" type="submit">Register</button>
-              </form>
-              <div id="register-message" class="message"></div>
-            </section>
-
-            <section id="pane-verify" class="pane">
-              <div class="eyebrow">Email verification</div>
-              <h2>Verify your email</h2>
-              <p id="verify-copy" class="subtle">Confirm your email address.</p>
-              <form id="verify-form">
-                <button class="primary" type="submit">Verify email</button>
-                <button id="verify-back" class="ghost" type="button">Back home</button>
-              </form>
-              <div id="verify-message" class="message"></div>
-            </section>
+            <form id="verify-form" style="max-width:320px;">
+              <button class="primary" type="submit">Verify email</button>
+            </form>
+            <div id="verify-message" class="message"></div>
           </div>
-        </div>
-      </section>
-    </main>
+        </section>
 
-    <section id="dashboard" class="dashboard">
-      <div class="topbar">
-        <div>
-          <div class="brand">__SITE_NAME__</div>
-          <div id="welcome-line" class="subtle" style="margin: 8px 0 0;">Signed out</div>
-        </div>
-        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-          <span id="role-pill" class="role-pill">Guest</span>
-          <button id="logout-button" class="ghost" type="button">Sign out</button>
-        </div>
-      </div>
-
-      <div class="dashboard-body">
-        <article id="user-panel" class="panel-card" style="display:none;">
-          <h3>"Jeszcze nie działa, ale może będzie" — Paulo Coelho</h3>
-        </article>
-
-        <article id="admin-panel" class="panel-card" style="display:none;">
-          <div style="display:flex; gap:16px; justify-content:space-between; align-items:flex-start; flex-wrap:wrap;">
-            <div>
-              <h3>Admin control panel</h3>
-              <p>
-                For now this demo only wires one moderation action: fetch users and ban them directly through the backend API.
-              </p>
+        <section id="view-task" class="view">
+          <div class="card">
+            <div class="view-head">
+              <div>
+                <div class="section-eyebrow">Task</div>
+                <h2 id="task-title" style="margin-top:10px;">Loading task…</h2>
+                <p id="task-subtitle" class="lead"></p>
+              </div>
+              <div class="inline-actions">
+                <button id="task-back" class="ghost" type="button">Back to tasks</button>
+                <button id="task-submit" class="primary" type="button">Submit</button>
+              </div>
             </div>
-            <button id="refresh-users" class="ghost" type="button">Refresh users</button>
+            <div id="task-meta" class="meta-grid"></div>
+            <div id="task-description" class="description-box"></div>
+            <div id="task-message" class="message"></div>
           </div>
-          <div id="admin-message" class="message"></div>
-          <div id="users-list" class="users"></div>
-        </article>
-      </div>
-    </section>
+        </section>
+
+        <section id="view-submissions" class="view">
+          <div class="card">
+            <div class="view-head">
+              <div>
+                <div class="section-eyebrow">Queue</div>
+                <h2 id="submissions-title" style="margin-top:10px;">Submissions</h2>
+                <p id="submissions-copy" class="lead"></p>
+              </div>
+              <div class="inline-actions">
+                <button id="submissions-mine" class="nav-link" type="button">My submissions</button>
+                <button id="submissions-all" class="nav-link" type="button" style="display:none;">All submissions</button>
+                <button id="refresh-submissions" class="ghost" type="button">Refresh</button>
+              </div>
+            </div>
+            <div id="submissions-message" class="message"></div>
+            <div id="submissions-list" class="submission-list"></div>
+          </div>
+        </section>
+
+        <section id="view-submission-detail" class="view">
+          <div class="card">
+            <div class="view-head">
+              <div>
+                <div class="section-eyebrow">Submission</div>
+                <h2 id="submission-detail-title" style="margin-top:10px;">Submission</h2>
+                <p id="submission-detail-copy" class="lead"></p>
+              </div>
+              <button id="submission-detail-back" class="ghost" type="button">Back to queue</button>
+            </div>
+            <div id="submission-detail-meta" class="meta-grid"></div>
+            <div class="json-box">
+              <pre id="submission-detail-json">{}</pre>
+            </div>
+            <div id="submission-detail-message" class="message"></div>
+          </div>
+        </section>
+      </main>
+    </div>
 
     <script>
       const state = {
         accessToken: localStorage.getItem("recognita.access_token"),
         refreshToken: localStorage.getItem("recognita.refresh_token"),
         user: null,
+        tasks: [],
+        taskById: new Map(),
+        taskBySlug: new Map(),
+        currentTask: null,
+        currentSubmission: null,
       };
 
       const nodes = {
-        authShell: document.getElementById("auth-shell"),
-        dashboard: document.getElementById("dashboard"),
-        signInTab: document.getElementById("tab-signin"),
-        registerTab: document.getElementById("tab-register"),
-        cardHead: document.querySelector(".card-head"),
-        signInPane: document.getElementById("pane-signin"),
-        registerPane: document.getElementById("pane-register"),
-        verifyPane: document.getElementById("pane-verify"),
-        signInForm: document.getElementById("signin-form"),
+        flash: document.getElementById("flash"),
+        rolePill: document.getElementById("role-pill"),
+        authShortcut: document.getElementById("auth-shortcut"),
+        logoutButton: document.getElementById("logout-button"),
+        navHome: document.getElementById("nav-home"),
+        navSubmissions: document.getElementById("nav-submissions"),
+        navAdminSubmissions: document.getElementById("nav-admin-submissions"),
+        viewHome: document.getElementById("view-home"),
+        viewVerify: document.getElementById("view-verify"),
+        viewTask: document.getElementById("view-task"),
+        viewSubmissions: document.getElementById("view-submissions"),
+        viewSubmissionDetail: document.getElementById("view-submission-detail"),
+        authCard: document.getElementById("auth-card"),
+        signedOutPanel: document.getElementById("signed-out-panel"),
+        signedInPanel: document.getElementById("signed-in-panel"),
+        sessionTitle: document.getElementById("session-title"),
+        sessionCopy: document.getElementById("session-copy"),
+        sidebarMySubmissions: document.getElementById("sidebar-my-submissions"),
+        sidebarAdminSubmissions: document.getElementById("sidebar-admin-submissions"),
+        adminUsersPanel: document.getElementById("admin-users-panel"),
+        refreshUsers: document.getElementById("refresh-users"),
+        adminMessage: document.getElementById("admin-message"),
+        usersList: document.getElementById("users-list"),
+        tabSignin: document.getElementById("tab-signin"),
+        tabRegister: document.getElementById("tab-register"),
+        paneSignin: document.getElementById("pane-signin"),
+        paneRegister: document.getElementById("pane-register"),
+        signinForm: document.getElementById("signin-form"),
         registerForm: document.getElementById("register-form"),
-        verifyForm: document.getElementById("verify-form"),
-        signInMessage: document.getElementById("signin-message"),
+        signinMessage: document.getElementById("signin-message"),
         registerMessage: document.getElementById("register-message"),
+        verifyForm: document.getElementById("verify-form"),
         verifyMessage: document.getElementById("verify-message"),
         verifyCopy: document.getElementById("verify-copy"),
         verifyBack: document.getElementById("verify-back"),
-        welcomeLine: document.getElementById("welcome-line"),
-        rolePill: document.getElementById("role-pill"),
-        logoutButton: document.getElementById("logout-button"),
-        userPanel: document.getElementById("user-panel"),
-        adminPanel: document.getElementById("admin-panel"),
-        adminMessage: document.getElementById("admin-message"),
-        usersList: document.getElementById("users-list"),
-        refreshUsers: document.getElementById("refresh-users"),
+        refreshTasks: document.getElementById("refresh-tasks"),
+        filterQuery: document.getElementById("filter-query"),
+        filterType: document.getElementById("filter-type"),
+        filterMinDifficulty: document.getElementById("filter-min-difficulty"),
+        filterMaxDifficulty: document.getElementById("filter-max-difficulty"),
+        tasksMeta: document.getElementById("tasks-meta"),
+        tasksList: document.getElementById("tasks-list"),
+        taskTitle: document.getElementById("task-title"),
+        taskSubtitle: document.getElementById("task-subtitle"),
+        taskMeta: document.getElementById("task-meta"),
+        taskDescription: document.getElementById("task-description"),
+        taskMessage: document.getElementById("task-message"),
+        taskBack: document.getElementById("task-back"),
+        taskSubmit: document.getElementById("task-submit"),
+        submissionsTitle: document.getElementById("submissions-title"),
+        submissionsCopy: document.getElementById("submissions-copy"),
+        submissionsMessage: document.getElementById("submissions-message"),
+        submissionsList: document.getElementById("submissions-list"),
+        submissionsMine: document.getElementById("submissions-mine"),
+        submissionsAll: document.getElementById("submissions-all"),
+        refreshSubmissions: document.getElementById("refresh-submissions"),
+        submissionDetailTitle: document.getElementById("submission-detail-title"),
+        submissionDetailCopy: document.getElementById("submission-detail-copy"),
+        submissionDetailMeta: document.getElementById("submission-detail-meta"),
+        submissionDetailJson: document.getElementById("submission-detail-json"),
+        submissionDetailMessage: document.getElementById("submission-detail-message"),
+        submissionDetailBack: document.getElementById("submission-detail-back"),
       };
 
       function saveTokens(tokens) {
@@ -683,23 +835,91 @@ let template =
         node.className = "message" + (type ? " " + type : "");
       }
 
-      function setTab(mode) {
-        const isSignIn = mode === "signin";
-        nodes.signInTab.classList.toggle("active", isSignIn);
-        nodes.registerTab.classList.toggle("active", !isSignIn);
-        nodes.signInPane.classList.toggle("active", isSignIn);
-        nodes.registerPane.classList.toggle("active", !isSignIn);
-        nodes.verifyPane.classList.remove("active");
-        nodes.cardHead.style.display = "flex";
+      function setFlash(text, type = "") {
+        nodes.flash.textContent = text || "";
+        nodes.flash.className = "flash" + (text ? " visible" : "") + (type ? " " + type : "");
       }
 
-      function showVerifyPane() {
-        nodes.signInTab.classList.remove("active");
-        nodes.registerTab.classList.remove("active");
-        nodes.signInPane.classList.remove("active");
-        nodes.registerPane.classList.remove("active");
-        nodes.verifyPane.classList.add("active");
-        nodes.cardHead.style.display = "none";
+      function clearFlash() {
+        setFlash("");
+      }
+
+      function parseRoute() {
+        const path = window.location.pathname;
+        if (path === "/verify") {
+          return { name: "verify" };
+        }
+        if (path === "/submissions") {
+          return { name: "submissions", scope: "mine" };
+        }
+        if (path === "/admin/submissions") {
+          return { name: "submissions", scope: "all" };
+        }
+        if (path.startsWith("/submissions/")) {
+          return { name: "submission-detail", id: path.slice("/submissions/".length) };
+        }
+        if (path.startsWith("/tasks/")) {
+          return { name: "task", slug: decodeURIComponent(path.slice("/tasks/".length)) };
+        }
+        return { name: "home" };
+      }
+
+      function navigate(path) {
+        if (window.location.pathname === path && !window.location.search) {
+          renderRoute();
+          return;
+        }
+        history.pushState({}, "", path);
+        renderRoute();
+      }
+
+      function setActiveView(viewName) {
+        const allViews = [
+          ["home", nodes.viewHome],
+          ["verify", nodes.viewVerify],
+          ["task", nodes.viewTask],
+          ["submissions", nodes.viewSubmissions],
+          ["submission-detail", nodes.viewSubmissionDetail],
+        ];
+        allViews.forEach(([name, node]) => node.classList.toggle("active", name === viewName));
+      }
+
+      function updateNav() {
+        const route = parseRoute();
+        nodes.navHome.classList.toggle("active", route.name === "home" || route.name === "task");
+        nodes.navSubmissions.classList.toggle("active", route.name === "submissions" && route.scope === "mine");
+        nodes.navAdminSubmissions.classList.toggle("active", route.name === "submissions" && route.scope === "all");
+
+        const isAdmin = state.user?.role === "admin";
+        nodes.navSubmissions.style.display = state.user ? "" : "none";
+        nodes.navAdminSubmissions.style.display = isAdmin ? "" : "none";
+        nodes.submissionsAll.style.display = isAdmin ? "" : "none";
+        nodes.sidebarAdminSubmissions.style.display = isAdmin ? "" : "none";
+      }
+
+      function updateSessionPanels() {
+        const isLoggedIn = Boolean(state.user);
+        const isAdmin = state.user?.role === "admin";
+
+        nodes.signedOutPanel.style.display = isLoggedIn ? "none" : "";
+        nodes.signedInPanel.style.display = isLoggedIn ? "" : "none";
+        nodes.logoutButton.style.display = isLoggedIn ? "" : "none";
+        nodes.authShortcut.style.display = isLoggedIn ? "none" : "";
+        nodes.adminUsersPanel.style.display = isAdmin ? "" : "none";
+
+        if (isLoggedIn) {
+          nodes.sessionTitle.textContent = "Signed in as " + state.user.username;
+          nodes.sessionCopy.textContent =
+            (state.user.verified ? "Verified account." : "Email not verified yet.") +
+            " Use the task pages to create mock submissions.";
+          nodes.rolePill.textContent = isAdmin ? "Admin" : "User";
+          nodes.rolePill.className = "role-pill" + (isAdmin ? " admin" : "");
+        } else {
+          nodes.rolePill.textContent = "Guest";
+          nodes.rolePill.className = "role-pill";
+        }
+
+        updateNav();
       }
 
       async function parseJsonSafe(response) {
@@ -750,82 +970,387 @@ let template =
         const payload = await parseJsonSafe(response);
         if (!response.ok) {
           clearSession();
+          updateSessionPanels();
           return false;
         }
         saveTokens(payload.tokens);
         return true;
       }
 
-      function renderLoggedOut() {
-        nodes.authShell.style.display = "";
-        nodes.dashboard.classList.remove("active");
-        nodes.userPanel.style.display = "none";
-        nodes.adminPanel.style.display = "none";
-        if (window.location.pathname === "/verify") {
-          showVerifyPane();
-        } else {
-          setTab("signin");
+      function setAuthTab(mode) {
+        const signIn = mode === "signin";
+        nodes.tabSignin.classList.toggle("active", signIn);
+        nodes.tabRegister.classList.toggle("active", !signIn);
+        nodes.paneSignin.classList.toggle("active", signIn);
+        nodes.paneRegister.classList.toggle("active", !signIn);
+      }
+
+      function scrollToAuth() {
+        nodes.authCard.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      function resetTaskIndex(tasks) {
+        state.tasks = tasks || [];
+        state.taskById = new Map();
+        state.taskBySlug = new Map();
+        state.tasks.forEach((task) => {
+          state.taskById.set(task.id, task);
+          if (task.slug) state.taskBySlug.set(task.slug, task);
+        });
+      }
+
+      async function loadTasks(force = false) {
+        if (!force && state.tasks.length) {
+          return state.tasks;
+        }
+        nodes.tasksList.classList.add("loading");
+        try {
+          const response = await fetch("/proxy/tasks");
+          const payload = await parseJsonSafe(response);
+          if (!response.ok) {
+            throw new Error(errorMessage(payload, "Could not load tasks"));
+          }
+          resetTaskIndex(payload.tasks || []);
+          fillTaskTypeOptions();
+          renderTaskList();
+          return state.tasks;
+        } finally {
+          nodes.tasksList.classList.remove("loading");
         }
       }
 
-      function renderLoggedIn(user) {
-        state.user = user;
-        nodes.authShell.style.display = "none";
-        nodes.dashboard.classList.add("active");
-        nodes.welcomeLine.textContent = "Signed in as " + user.username;
-        nodes.rolePill.textContent = user.role === "admin" ? "Admin" : "User";
-        nodes.rolePill.style.background = user.role === "admin"
-          ? "rgba(181, 108, 63, 0.12)"
-          : "rgba(31, 42, 48, 0.08)";
-        nodes.rolePill.style.color = user.role === "admin" ? "var(--accent)" : "var(--ink)";
+      function fillTaskTypeOptions() {
+        const current = nodes.filterType.value;
+        const types = Array.from(new Set(state.tasks.map((task) => task.type))).sort();
+        nodes.filterType.innerHTML = "";
+        const allOption = document.createElement("option");
+        allOption.value = "";
+        allOption.textContent = "All types";
+        nodes.filterType.appendChild(allOption);
+        types.forEach((type) => {
+          const option = document.createElement("option");
+          option.value = type;
+          option.textContent = type.replaceAll("_", " ");
+          nodes.filterType.appendChild(option);
+        });
+        if (types.includes(current) || current === "") {
+          nodes.filterType.value = current;
+        }
+      }
 
-        if (user.role === "admin") {
-          nodes.userPanel.style.display = "none";
-          nodes.adminPanel.style.display = "block";
-          loadUsers();
-        } else {
-          nodes.adminPanel.style.display = "none";
-          nodes.userPanel.style.display = "block";
+      function filterTasks() {
+        const query = nodes.filterQuery.value.trim().toLowerCase();
+        const type = nodes.filterType.value;
+        const minDifficulty = Number(nodes.filterMinDifficulty.value);
+        const maxDifficulty = Number(nodes.filterMaxDifficulty.value);
+
+        return state.tasks.filter((task) => {
+          if (query && !task.title.toLowerCase().includes(query)) return false;
+          if (type && task.type !== type) return false;
+          if (nodes.filterMinDifficulty.value !== "" && task.difficulty < minDifficulty) return false;
+          if (nodes.filterMaxDifficulty.value !== "" && task.difficulty > maxDifficulty) return false;
+          return true;
+        });
+      }
+
+      function verdictClass(verdict) {
+        switch (verdict) {
+          case "ACCEPTED":
+            return "accepted";
+          case "REJECTED":
+            return "rejected";
+          case "INVALID_FORMAT":
+            return "invalid-format";
+          case "INTERNAL_ERROR":
+            return "internal-error";
+          default:
+            return "pending";
+        }
+      }
+
+      function createTag(text, className = "") {
+        const tag = document.createElement("span");
+        tag.className = "tag" + (className ? " " + className : "");
+        tag.textContent = text;
+        return tag;
+      }
+
+      function renderTaskList() {
+        const tasks = filterTasks();
+        nodes.tasksList.innerHTML = "";
+        nodes.tasksMeta.textContent =
+          tasks.length + " task(s) shown out of " + state.tasks.length + ".";
+
+        if (!tasks.length) {
+          const empty = document.createElement("div");
+          empty.className = "empty";
+          empty.textContent = "No tasks match the current filters.";
+          nodes.tasksList.appendChild(empty);
+          return;
+        }
+
+        tasks.forEach((task) => {
+          const item = document.createElement("div");
+          item.className = "task-item";
+
+          const left = document.createElement("div");
+          const title = document.createElement("div");
+          title.className = "task-title";
+          title.textContent = task.title;
+
+          const summary = document.createElement("div");
+          summary.className = "task-summary";
+          summary.appendChild(createTag(task.type.replaceAll("_", " ")));
+          summary.appendChild(createTag("difficulty " + task.difficulty));
+          if (task.short_description) {
+            summary.appendChild(createTag(task.short_description));
+          }
+
+          left.appendChild(title);
+          left.appendChild(summary);
+
+          const button = document.createElement("button");
+          button.className = task.slug ? "primary" : "ghost";
+          button.type = "button";
+          button.textContent = task.slug ? "Open task" : "Missing slug";
+          button.disabled = !task.slug;
+          if (task.slug) {
+            button.addEventListener("click", () => navigate("/tasks/" + encodeURIComponent(task.slug)));
+          }
+
+          item.appendChild(left);
+          item.appendChild(button);
+          nodes.tasksList.appendChild(item);
+        });
+      }
+
+      function requireUser() {
+        if (state.user) return true;
+        setFlash("Sign in first to access submissions.", "error");
+        setAuthTab("signin");
+        navigate("/");
+        setTimeout(scrollToAuth, 30);
+        return false;
+      }
+
+      function requireAdmin() {
+        if (state.user?.role === "admin") return true;
+        setFlash("Admin privileges required for the full submission queue.", "error");
+        navigate(state.user ? "/submissions" : "/");
+        return false;
+      }
+
+      async function fetchTaskBySlug(slug) {
+        const cached = state.taskBySlug.get(slug);
+        if (cached) return cached;
+        const response = await fetch("/proxy/tasks/slug/" + encodeURIComponent(slug));
+        const payload = await parseJsonSafe(response);
+        if (!response.ok) {
+          throw new Error(errorMessage(payload, "Task not found"));
+        }
+        const task = payload.task;
+        state.taskById.set(task.id, task);
+        if (task.slug) state.taskBySlug.set(task.slug, task);
+        return task;
+      }
+
+      function renderTaskMeta(task) {
+        nodes.taskMeta.innerHTML = "";
+        nodes.taskMeta.appendChild(createTag(task.type.replaceAll("_", " ")));
+        nodes.taskMeta.appendChild(createTag("difficulty " + task.difficulty));
+        nodes.taskMeta.appendChild(createTag(task.visibility.toLowerCase()));
+        nodes.taskMeta.appendChild(createTag(task.status.toLowerCase()));
+      }
+
+      async function renderTaskDetail(slug) {
+        setActiveView("task");
+        clearFlash();
+        setMessage(nodes.taskMessage, "Loading task...");
+        nodes.taskTitle.textContent = "Loading task…";
+        nodes.taskSubtitle.textContent = "";
+        nodes.taskDescription.textContent = "";
+        try {
+          const task = await fetchTaskBySlug(slug);
+          state.currentTask = task;
+          nodes.taskTitle.textContent = task.title;
+          nodes.taskSubtitle.textContent =
+            (task.short_description || "Open public task page.") +
+            (task.slug ? " slug: /tasks/" + task.slug : "");
+          nodes.taskDescription.textContent = task.description;
+          renderTaskMeta(task);
+          setMessage(nodes.taskMessage, "");
+        } catch (error) {
+          nodes.taskTitle.textContent = "Task not found";
+          nodes.taskSubtitle.textContent = "";
+          nodes.taskDescription.textContent = "";
+          nodes.taskMeta.innerHTML = "";
+          setMessage(nodes.taskMessage, error.message || "Could not load task.", "error");
+        }
+      }
+
+      async function submitCurrentTask() {
+        if (!state.currentTask) return;
+        if (!requireUser()) return;
+
+        nodes.taskSubmit.disabled = true;
+        setMessage(nodes.taskMessage, "Submitting mock payload...");
+        try {
+          const response = await api("/proxy/tasks/" + state.currentTask.id + "/submissions", {
+            method: "POST",
+            body: JSON.stringify({ data: {} }),
+          });
+          const payload = await parseJsonSafe(response);
+          if (!response.ok) {
+            setMessage(nodes.taskMessage, errorMessage(payload, "Submission failed"), "error");
+            return;
+          }
+          setMessage(nodes.taskMessage, "Submission queued.", "success");
+          navigate("/submissions/" + payload.submission.id);
+        } catch (_error) {
+          setMessage(nodes.taskMessage, "Network error while creating submission.", "error");
+        } finally {
+          nodes.taskSubmit.disabled = false;
+        }
+      }
+
+      function taskLabelFromId(taskId) {
+        const task = state.taskById.get(taskId);
+        if (!task) return "Task #" + taskId;
+        return task.title;
+      }
+
+      function submissionRouteScope() {
+        const route = parseRoute();
+        return route.name === "submissions" ? route.scope : "mine";
+      }
+
+      async function renderSubmissions(scope) {
+        if (!requireUser()) return;
+        if (scope === "all" && !requireAdmin()) return;
+
+        setActiveView("submissions");
+        clearFlash();
+        nodes.submissionsList.innerHTML = "";
+        nodes.submissionsList.classList.add("loading");
+        nodes.submissionsTitle.textContent = scope === "all" ? "All submissions" : "My submissions";
+        nodes.submissionsCopy.textContent =
+          scope === "all"
+            ? "Admin view over the entire submissions queue."
+            : "Your personal queue of mock submissions.";
+        setMessage(nodes.submissionsMessage, "Loading submissions...");
+        nodes.submissionsMine.classList.toggle("active", scope === "mine");
+        nodes.submissionsAll.classList.toggle("active", scope === "all");
+
+        try {
+          await loadTasks();
+          const response = await api("/proxy/submissions?scope=" + scope);
+          const payload = await parseJsonSafe(response);
+          if (!response.ok) {
+            setMessage(nodes.submissionsMessage, errorMessage(payload, "Could not load submissions"), "error");
+            return;
+          }
+
+          const submissions = payload.submissions || [];
+          setMessage(nodes.submissionsMessage, "");
+          if (!submissions.length) {
+            const empty = document.createElement("div");
+            empty.className = "empty";
+            empty.textContent = "No submissions available yet.";
+            nodes.submissionsList.appendChild(empty);
+            return;
+          }
+
+          submissions.forEach((submission) => {
+            const item = document.createElement("div");
+            item.className = "submission-item";
+
+            const title = document.createElement("div");
+            title.className = "submission-title";
+            title.textContent = "Submission #" + submission.id;
+
+            const summary = document.createElement("div");
+            summary.className = "submission-summary";
+            summary.appendChild(createTag(taskLabelFromId(submission.task_id)));
+            summary.appendChild(createTag(submission.verdict, verdictClass(submission.verdict)));
+            summary.appendChild(createTag("user #" + submission.user_id));
+            summary.appendChild(createTag(submission.created_at));
+
+            const actions = document.createElement("div");
+            actions.className = "inline-actions";
+            const openButton = document.createElement("button");
+            openButton.className = "primary";
+            openButton.type = "button";
+            openButton.textContent = "Open JSON";
+            openButton.addEventListener("click", () => navigate("/submissions/" + submission.id));
+            actions.appendChild(openButton);
+
+            item.appendChild(title);
+            item.appendChild(summary);
+            item.appendChild(actions);
+            nodes.submissionsList.appendChild(item);
+          });
+        } catch (_error) {
+          setMessage(nodes.submissionsMessage, "Network error while loading submissions.", "error");
+        } finally {
+          nodes.submissionsList.classList.remove("loading");
+        }
+      }
+
+      async function renderSubmissionDetail(id) {
+        if (!requireUser()) return;
+        setActiveView("submission-detail");
+        clearFlash();
+        setMessage(nodes.submissionDetailMessage, "Loading submission...");
+        try {
+          await loadTasks();
+          const response = await api("/proxy/submissions/" + encodeURIComponent(id));
+          const payload = await parseJsonSafe(response);
+          if (!response.ok) {
+            setMessage(nodes.submissionDetailMessage, errorMessage(payload, "Could not load submission"), "error");
+            nodes.submissionDetailTitle.textContent = "Submission not found";
+            nodes.submissionDetailCopy.textContent = "";
+            nodes.submissionDetailMeta.innerHTML = "";
+            nodes.submissionDetailJson.textContent = "{}";
+            return;
+          }
+
+          const submission = payload.submission;
+          state.currentSubmission = submission;
+          nodes.submissionDetailTitle.textContent = "Submission #" + submission.id;
+          nodes.submissionDetailCopy.textContent = taskLabelFromId(submission.task_id);
+          nodes.submissionDetailMeta.innerHTML = "";
+          nodes.submissionDetailMeta.appendChild(createTag(submission.verdict, verdictClass(submission.verdict)));
+          nodes.submissionDetailMeta.appendChild(createTag("task #" + submission.task_id));
+          nodes.submissionDetailMeta.appendChild(createTag("user #" + submission.user_id));
+          nodes.submissionDetailMeta.appendChild(createTag(submission.created_at));
+          if (submission.judged_at) {
+            nodes.submissionDetailMeta.appendChild(createTag("judged " + submission.judged_at));
+          }
+          nodes.submissionDetailJson.textContent = JSON.stringify(submission.data, null, 2);
+          setMessage(nodes.submissionDetailMessage, "");
+        } catch (_error) {
+          setMessage(nodes.submissionDetailMessage, "Network error while loading submission.", "error");
         }
       }
 
       function userRow(user) {
         const wrapper = document.createElement("div");
-        wrapper.className = "user-row";
-
-        const meta = document.createElement("div");
-        meta.className = "user-meta";
+        wrapper.className = "user-item";
 
         const name = document.createElement("div");
         name.className = "user-name";
         name.textContent = user.username;
 
-        const subline = document.createElement("div");
-        subline.className = "user-subline";
-
-        const role = document.createElement("span");
-        role.className = "tag" + (user.role === "admin" ? " admin" : "");
-        role.textContent = user.role;
-        subline.appendChild(role);
-
-        if (user.email) {
-          const email = document.createElement("span");
-          email.className = "tag";
-          email.textContent = user.email;
-          subline.appendChild(email);
-        }
-
+        const summary = document.createElement("div");
+        summary.className = "user-summary";
+        summary.appendChild(createTag(user.role, user.role === "admin" ? "admin" : ""));
+        summary.appendChild(createTag(user.email));
         if (user.is_banned) {
-          const banned = document.createElement("span");
-          banned.className = "tag banned";
-          banned.textContent = user.ban_reason ? "banned: " + user.ban_reason : "banned";
-          subline.appendChild(banned);
+          summary.appendChild(createTag(user.ban_reason ? "banned: " + user.ban_reason : "banned", "banned"));
         }
 
-        meta.appendChild(name);
-        meta.appendChild(subline);
-
-        const controls = document.createElement("div");
+        const actions = document.createElement("div");
+        actions.className = "inline-actions";
         if (user.role !== "admin") {
           const button = document.createElement("button");
           button.className = user.is_banned ? "ghost" : "danger";
@@ -853,19 +1378,20 @@ let template =
               button.disabled = false;
             }
           });
-          controls.appendChild(button);
+          actions.appendChild(button);
         }
 
-        wrapper.appendChild(meta);
-        wrapper.appendChild(controls);
+        wrapper.appendChild(name);
+        wrapper.appendChild(summary);
+        wrapper.appendChild(actions);
         return wrapper;
       }
 
       async function loadUsers() {
+        if (state.user?.role !== "admin") return;
         nodes.usersList.innerHTML = "";
-        nodes.adminPanel.classList.add("loading");
+        nodes.usersList.classList.add("loading");
         setMessage(nodes.adminMessage, "Loading users...");
-
         try {
           const response = await api("/proxy/users");
           const payload = await parseJsonSafe(response);
@@ -873,10 +1399,8 @@ let template =
             setMessage(nodes.adminMessage, errorMessage(payload, "Could not load users"), "error");
             return;
           }
-
-          const users = payload.users || [];
           setMessage(nodes.adminMessage, "");
-
+          const users = payload.users || [];
           if (!users.length) {
             const empty = document.createElement("div");
             empty.className = "empty";
@@ -884,31 +1408,70 @@ let template =
             nodes.usersList.appendChild(empty);
             return;
           }
-
           users.forEach((user) => nodes.usersList.appendChild(userRow(user)));
         } catch (_error) {
           setMessage(nodes.adminMessage, "Network error while loading users.", "error");
         } finally {
-          nodes.adminPanel.classList.remove("loading");
+          nodes.usersList.classList.remove("loading");
         }
       }
 
-      async function hydrateSession() {
-        if (window.location.pathname === "/verify") {
-          renderLoggedOut();
-          const token = new URLSearchParams(window.location.search).get("token");
-          if (!token) {
-            setMessage(nodes.verifyMessage, "Missing verification token.", "error");
-            nodes.verifyCopy.textContent = "This verification link is incomplete.";
-          } else {
-            setMessage(nodes.verifyMessage, "");
-            nodes.verifyCopy.textContent = "Confirm your email address.";
-          }
+      async function renderVerify() {
+        setActiveView("verify");
+        clearFlash();
+        const token = new URLSearchParams(window.location.search).get("token");
+        if (!token) {
+          nodes.verifyCopy.textContent = "This verification link is incomplete.";
+          setMessage(nodes.verifyMessage, "Missing verification token.", "error");
+        } else {
+          nodes.verifyCopy.textContent = "Confirm your email address.";
+          setMessage(nodes.verifyMessage, "");
+        }
+      }
+
+      async function renderRoute() {
+        updateSessionPanels();
+        const route = parseRoute();
+
+        if (route.name === "verify") {
+          await renderVerify();
           return;
         }
 
+        if (route.name === "task") {
+          await renderTaskDetail(route.slug);
+          updateNav();
+          return;
+        }
+
+        if (route.name === "submissions") {
+          await renderSubmissions(route.scope);
+          updateNav();
+          return;
+        }
+
+        if (route.name === "submission-detail") {
+          await renderSubmissionDetail(route.id);
+          updateNav();
+          return;
+        }
+
+        setActiveView("home");
+        clearFlash();
+        renderTaskList();
+        updateNav();
+      }
+
+      async function hydrateSession() {
+        try {
+          await loadTasks();
+        } catch (error) {
+          setFlash(error.message || "Could not load tasks.", "error");
+        }
+
         if (!state.accessToken) {
-          renderLoggedOut();
+          updateSessionPanels();
+          renderRoute();
           return;
         }
 
@@ -917,71 +1480,117 @@ let template =
           const payload = await parseJsonSafe(response);
           if (!response.ok) {
             clearSession();
-            renderLoggedOut();
-            return;
+          } else {
+            state.user = payload.user;
           }
-          renderLoggedIn(payload.user);
         } catch (_error) {
           clearSession();
-          renderLoggedOut();
         }
+
+        updateSessionPanels();
+        if (state.user?.role === "admin") {
+          loadUsers();
+        }
+        renderRoute();
       }
 
-      nodes.signInTab.addEventListener("click", () => setTab("signin"));
-      nodes.registerTab.addEventListener("click", () => setTab("register"));
+      nodes.tabSignin.addEventListener("click", () => setAuthTab("signin"));
+      nodes.tabRegister.addEventListener("click", () => setAuthTab("register"));
 
-      nodes.signInForm.addEventListener("submit", async (event) => {
+      nodes.filterQuery.addEventListener("input", renderTaskList);
+      nodes.filterType.addEventListener("change", renderTaskList);
+      nodes.filterMinDifficulty.addEventListener("input", renderTaskList);
+      nodes.filterMaxDifficulty.addEventListener("input", renderTaskList);
+      nodes.refreshTasks.addEventListener("click", async () => {
+        clearFlash();
+        try {
+          await loadTasks(true);
+          renderTaskList();
+        } catch (error) {
+          setFlash(error.message || "Could not refresh tasks.", "error");
+        }
+      });
+
+      nodes.navHome.addEventListener("click", () => navigate("/"));
+      nodes.navSubmissions.addEventListener("click", () => navigate("/submissions"));
+      nodes.navAdminSubmissions.addEventListener("click", () => navigate("/admin/submissions"));
+      nodes.sidebarMySubmissions.addEventListener("click", () => navigate("/submissions"));
+      nodes.sidebarAdminSubmissions.addEventListener("click", () => navigate("/admin/submissions"));
+      nodes.authShortcut.addEventListener("click", () => {
+        navigate("/");
+        setAuthTab("signin");
+        setTimeout(scrollToAuth, 30);
+      });
+      nodes.taskBack.addEventListener("click", () => navigate("/"));
+      nodes.taskSubmit.addEventListener("click", () => submitCurrentTask());
+      nodes.submissionsMine.addEventListener("click", () => navigate("/submissions"));
+      nodes.submissionsAll.addEventListener("click", () => navigate("/admin/submissions"));
+      nodes.refreshSubmissions.addEventListener("click", () => renderRoute());
+      nodes.submissionDetailBack.addEventListener("click", () => {
+        if (state.user?.role === "admin") {
+          navigate("/admin/submissions");
+        } else {
+          navigate("/submissions");
+        }
+      });
+      nodes.refreshUsers.addEventListener("click", () => loadUsers());
+      nodes.verifyBack.addEventListener("click", () => navigate("/"));
+
+      nodes.signinForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-        setMessage(nodes.signInMessage, "Signing in...");
-        const body = JSON.stringify({
-          username: document.getElementById("signin-username").value.trim(),
-          password: document.getElementById("signin-password").value,
-        });
-
+        setMessage(nodes.signinMessage, "Signing in...");
         try {
           const response = await fetch("/proxy/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body,
+            body: JSON.stringify({
+              username: document.getElementById("signin-username").value.trim(),
+              password: document.getElementById("signin-password").value,
+            }),
           });
           const payload = await parseJsonSafe(response);
           if (!response.ok) {
-            setMessage(nodes.signInMessage, errorMessage(payload, "Sign in failed"), "error");
+            setMessage(nodes.signinMessage, errorMessage(payload, "Sign in failed"), "error");
             return;
           }
-
           saveTokens(payload.tokens);
-          setMessage(nodes.signInMessage, "Signed in.", "success");
-          renderLoggedIn(payload.user);
+          state.user = payload.user;
+          setMessage(nodes.signinMessage, "Signed in.", "success");
+          updateSessionPanels();
+          if (state.user.role === "admin") {
+            loadUsers();
+          }
+          clearFlash();
+          renderRoute();
         } catch (_error) {
-          setMessage(nodes.signInMessage, "Network error while signing in.", "error");
+          setMessage(nodes.signinMessage, "Network error while signing in.", "error");
         }
       });
 
       nodes.registerForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         setMessage(nodes.registerMessage, "Creating account...");
-        const body = JSON.stringify({
-          username: document.getElementById("register-username").value.trim(),
-          email: document.getElementById("register-email").value.trim(),
-          password: document.getElementById("register-password").value,
-        });
-
         try {
           const response = await fetch("/proxy/auth/register", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body,
+            body: JSON.stringify({
+              username: document.getElementById("register-username").value.trim(),
+              email: document.getElementById("register-email").value.trim(),
+              password: document.getElementById("register-password").value,
+            }),
           });
           const payload = await parseJsonSafe(response);
           if (!response.ok) {
             setMessage(nodes.registerMessage, errorMessage(payload, "Registration failed"), "error");
             return;
           }
-
           saveTokens(payload.tokens);
+          state.user = payload.user;
           setMessage(nodes.registerMessage, "Account created. Check your email for the verification link.", "success");
-          renderLoggedIn(payload.user);
+          updateSessionPanels();
+          clearFlash();
+          renderRoute();
         } catch (_error) {
           setMessage(nodes.registerMessage, "Network error while registering.", "error");
         }
@@ -994,9 +1603,7 @@ let template =
           setMessage(nodes.verifyMessage, "Missing verification token.", "error");
           return;
         }
-
         setMessage(nodes.verifyMessage, "Verifying email...");
-
         try {
           const response = await fetch("/proxy/auth/verify-email", {
             method: "POST",
@@ -1008,15 +1615,10 @@ let template =
             setMessage(nodes.verifyMessage, errorMessage(payload, "Verification failed"), "error");
             return;
           }
-
           setMessage(nodes.verifyMessage, "Email verified.", "success");
         } catch (_error) {
           setMessage(nodes.verifyMessage, "Network error while verifying email.", "error");
         }
-      });
-
-      nodes.verifyBack.addEventListener("click", () => {
-        window.location.href = "/";
       });
 
       nodes.logoutButton.addEventListener("click", async () => {
@@ -1029,15 +1631,14 @@ let template =
           }
         } finally {
           clearSession();
-          renderLoggedOut();
-          setMessage(nodes.signInMessage, "");
+          updateSessionPanels();
+          setMessage(nodes.signinMessage, "");
           setMessage(nodes.registerMessage, "");
+          navigate("/");
         }
       });
 
-      nodes.refreshUsers.addEventListener("click", () => {
-        loadUsers();
-      });
+      window.addEventListener("popstate", renderRoute);
 
       hydrateSession();
     </script>

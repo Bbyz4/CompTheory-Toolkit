@@ -72,12 +72,16 @@ type t = {
     (Domain.task, error) result Lwt.t;
   list_tasks : unit -> (Domain.task list, error) result Lwt.t;
   find_task_by_id : int -> (Domain.task option, error) result Lwt.t;
+  find_task_by_slug : string -> (Domain.task option, error) result Lwt.t;
   create_submission :
     task_id:int ->
     user_id:int ->
     data:Yojson.Basic.t ->
     created_at:float ->
     (Domain.submission, error) result Lwt.t;
+  list_submissions : unit -> (Domain.submission list, error) result Lwt.t;
+  list_submissions_by_user :
+    user_id:int -> (Domain.submission list, error) result Lwt.t;
   find_submission_by_id : int -> (Domain.submission option, error) result Lwt.t;
   update_submission_result :
     submission_id:int ->

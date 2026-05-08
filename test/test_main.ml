@@ -132,6 +132,10 @@ let task_id_of_response response =
   let json = response_json response in
   json |> member "task" |> member "id" |> to_int
 
+let task_slug_of_response response =
+  let json = response_json response in
+  json |> member "task" |> member "slug" |> to_string
+
 let submission_id_of_response response =
   let json = response_json response in
   json |> member "submission" |> member "id" |> to_int
@@ -504,6 +508,80 @@ let test_task_config_template_endpoint () =
     = "mock")
     "Task config template endpoint should return the mock grader template"
 
+let test_task_without_slug_gets_generated_slug_and_can_be_loaded_by_slug () =
+  let fixture = make_fixture () in
+  let admin_access = login_admin fixture in
+  let created_task =
+    create_task fixture admin_access ~title:"Regular Languages 101" ()
+  in
+  assert_status `Created created_task;
+  let slug = task_slug_of_response created_task in
+  assert_true
+    (slug = "regular-languages-101")
+    "Task creation should generate a slug from the title when missing";
+  let fetched =
+    request fixture ~meth:`GET
+      ~target:("/api/v1/tasks/slug/" ^ slug)
+      ()
+  in
+  assert_status `OK fetched;
+  assert_true
+    (response_json fetched |> member "task" |> member "title" |> to_string
+    = "Regular Languages 101")
+    "Task should be fetchable by generated slug"
+
+let test_submissions_scope_mine_vs_all () =
+  let fixture = make_fixture () in
+  let admin_access = login_admin fixture in
+  let created_task = create_task fixture admin_access () in
+  assert_status `Created created_task;
+  let task_id = task_id_of_response created_task in
+  let alice = register fixture "queuealice" "queuealice@example.com" "password123" in
+  let bob = register fixture "queuebob" "queuebob@example.com" "password123" in
+  assert_status `Created alice;
+  assert_status `Created bob;
+  let alice_access = token_of_response alice "access_token" in
+  let bob_access = token_of_response bob "access_token" in
+  let post_submission access_token answer =
+    request fixture ~meth:`POST
+      ~target:(Printf.sprintf "/api/v1/tasks/%d/submissions" task_id)
+      ~headers:
+        [
+          ("Authorization", "Bearer " ^ access_token);
+          ("Content-Type", "application/json");
+        ]
+      ~body:
+        (Yojson.Basic.to_string
+           (`Assoc [ ("data", `Assoc [ ("answer", `String answer) ]) ]))
+      ()
+  in
+  assert_status `Created (post_submission alice_access "a");
+  assert_status `Created (post_submission bob_access "b");
+  let mine =
+    request fixture ~meth:`GET ~target:"/api/v1/submissions?scope=mine"
+      ~headers:[ ("Authorization", "Bearer " ^ alice_access) ]
+      ()
+  in
+  assert_status `OK mine;
+  assert_true
+    (List.length (response_json mine |> member "submissions" |> to_list) = 1)
+    "Mine scope should only return the current user's submissions";
+  let all_forbidden =
+    request fixture ~meth:`GET ~target:"/api/v1/submissions?scope=all"
+      ~headers:[ ("Authorization", "Bearer " ^ alice_access) ]
+      ()
+  in
+  assert_status `Forbidden all_forbidden;
+  let all_for_admin =
+    request fixture ~meth:`GET ~target:"/api/v1/submissions?scope=all"
+      ~headers:[ ("Authorization", "Bearer " ^ admin_access) ]
+      ()
+  in
+  assert_status `OK all_for_admin;
+  assert_true
+    (List.length (response_json all_for_admin |> member "submissions" |> to_list) = 2)
+    "Admin all scope should return every submission"
+
 let web_config () : Toolkit.Web_config.t =
   {
     mode = Toolkit.Runtime_mode.Local;
@@ -733,6 +811,9 @@ let tests =
     ( "submission_is_created_pending_and_worker_judges_it",
       test_submission_is_created_pending_and_worker_judges_it );
     ("task_config_template_endpoint", test_task_config_template_endpoint);
+    ( "task_without_slug_gets_generated_slug_and_can_be_loaded_by_slug",
+      test_task_without_slug_gets_generated_slug_and_can_be_loaded_by_slug );
+    ("submissions_scope_mine_vs_all", test_submissions_scope_mine_vs_all);
     ( "web_requires_access_code_for_html_and_proxy",
       test_web_requires_access_code_for_html_and_proxy );
     ( "web_access_gate_rejects_fake_cookie_and_accepts_real_one",

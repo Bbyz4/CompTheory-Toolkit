@@ -227,15 +227,18 @@ let require_access config handler request =
     gate_page config request
 
 let make config =
+  let render_page _request =
+    Dream.html (Web_page.render ~site_name:config.Web_config.site_name)
+  in
   let router =
     Dream.router
       [
-        Dream.get "/" (fun _request ->
-            Dream.html
-              (Web_page.render ~site_name:config.Web_config.site_name));
-        Dream.get "/verify" (fun _request ->
-            Dream.html
-              (Web_page.render ~site_name:config.Web_config.site_name));
+        Dream.get "/" render_page;
+        Dream.get "/verify" render_page;
+        Dream.get "/tasks/:slug" render_page;
+        Dream.get "/submissions" render_page;
+        Dream.get "/submissions/:id" render_page;
+        Dream.get "/admin/submissions" render_page;
         Dream.get "/health" (fun _request ->
             Dream.respond ~code:200 ~headers:json_headers
               (Yojson.Basic.to_string
@@ -264,6 +267,32 @@ let make config =
             proxy_authed config request ~meth:"POST" "/api/v1/auth/logout");
         Dream.get "/proxy/me" (fun request ->
             proxy_authed config request ~meth:"GET" "/api/v1/me");
+        Dream.get "/proxy/tasks" (fun request ->
+            let query =
+              match Uri.of_string (Dream.target request) |> Uri.verbatim_query with
+              | Some value -> "?" ^ value
+              | None -> ""
+            in
+            proxy_json config request ~meth:"GET" ("/api/v1/tasks" ^ query));
+        Dream.get "/proxy/tasks/slug/:slug" (fun request ->
+            let slug = Dream.param request "slug" in
+            proxy_json config request ~meth:"GET"
+              ("/api/v1/tasks/slug/" ^ Uri.pct_encode slug));
+        Dream.post "/proxy/tasks/:id/submissions" (fun request ->
+            let task_id = Dream.param request "id" in
+            proxy_authed config request ~meth:"POST"
+              ("/api/v1/tasks/" ^ task_id ^ "/submissions"));
+        Dream.get "/proxy/submissions" (fun request ->
+            let query =
+              match Uri.of_string (Dream.target request) |> Uri.verbatim_query with
+              | Some value -> "?" ^ value
+              | None -> ""
+            in
+            proxy_authed config request ~meth:"GET" ("/api/v1/submissions" ^ query));
+        Dream.get "/proxy/submissions/:id" (fun request ->
+            let submission_id = Dream.param request "id" in
+            proxy_authed config request ~meth:"GET"
+              ("/api/v1/submissions/" ^ submission_id));
         Dream.get "/proxy/users" (fun request ->
             proxy_authed config request ~meth:"GET" "/api/v1/users");
         Dream.post "/proxy/users/:id/ban" (fun request ->

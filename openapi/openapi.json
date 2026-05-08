@@ -372,6 +372,29 @@
         }
       }
     },
+    "/api/v1/tasks/slug/{slug}": {
+      "get": {
+        "summary": "Get one task by slug",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task returned"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      }
+    },
     "/api/v1/tasks/{id}/submissions": {
       "post": {
         "summary": "Create a submission for a task",
@@ -393,6 +416,38 @@
         "responses": {
           "201": {
             "description": "Submission created and queued"
+          }
+        }
+      }
+    },
+    "/api/v1/submissions": {
+      "get": {
+        "summary": "List submissions",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "mine",
+                "all"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Submission list returned"
+          },
+          "403": {
+            "description": "Admin only for scope=all"
           }
         }
       }
