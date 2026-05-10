@@ -302,6 +302,28 @@ let test_login_and_logout () =
   in
   assert_status `Unauthorized me_response
 
+let test_user_can_delete_own_account () =
+  let fixture = make_fixture () in
+  let register_response =
+    register fixture "bruno" "bruno@example.com" "password123"
+  in
+  assert_status `Created register_response;
+  let access_token = token_of_response register_response "access_token" in
+  let delete_response =
+    request fixture ~meth:`DELETE ~target:"/api/v1/me"
+      ~headers:[ ("Authorization", "Bearer " ^ access_token) ]
+      ()
+  in
+  assert_status `OK delete_response;
+  let me_response =
+    request fixture ~meth:`GET ~target:"/api/v1/me"
+      ~headers:[ ("Authorization", "Bearer " ^ access_token) ]
+      ()
+  in
+  assert_status `Unauthorized me_response;
+  let relogin = login fixture "bruno" "password123" in
+  assert_status `Unauthorized relogin
+
 let test_refresh_rotates_tokens () =
   let fixture = make_fixture () in
   let register_response =
@@ -801,6 +823,7 @@ let tests =
     ( "register_sends_verification_email_and_verify_endpoint",
       test_register_sends_verification_email_and_verify_endpoint );
     ("login_and_logout", test_login_and_logout);
+    ("delete_own_account", test_user_can_delete_own_account);
     ("refresh_rotates_tokens", test_refresh_rotates_tokens);
     ("admin_lists_and_moderates_users", test_admin_lists_and_moderates_users);
     ("non_admin_cannot_moderate", test_non_admin_cannot_moderate);

@@ -55,6 +55,7 @@ type t = {
     verification_id:int -> consumed_at:float -> (unit, error) result Lwt.t;
   mark_user_verified :
     user_id:int -> updated_at:float -> (Domain.user option, error) result Lwt.t;
+  delete_user : user_id:int -> (Domain.user option, error) result Lwt.t;
   create_task :
     title:string ->
     slug:string option ->

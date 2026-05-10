@@ -4,5 +4,6 @@ _build/
 .DS_Store
 .env
 .codex
+.local-deploy/
 infra/nginx/certs/*
 !infra/nginx/certs/.gitkeep

@@ -72,6 +72,26 @@ module Q = struct
         ';
       |}
 
+  let acquire_schema_lock =
+    Caqti_type.(unit ->. unit)
+      {|
+        DO '
+        BEGIN
+          PERFORM pg_advisory_lock(2026050801);
+        END
+        ';
+      |}
+
+  let release_schema_lock =
+    Caqti_type.(unit ->. unit)
+      {|
+        DO '
+        BEGIN
+          PERFORM pg_advisory_unlock(2026050801);
+        END
+        ';
+      |}
+
   let create_users_table =
     Caqti_type.(unit ->. unit)
       {|
@@ -729,6 +749,15 @@ module Q = struct
       |}
       ^ user_json)
 
+  let delete_user =
+    Caqti_type.(int ->? string)
+      ({|
+        DELETE FROM users
+        WHERE id = ?
+        RETURNING
+      |}
+      ^ user_json)
+
   let create_session =
     Caqti_type.(tup4 int string string (tup3 float float float) ->! string)
       ({|
@@ -1127,6 +1156,10 @@ let parse_public_user_list json_text =
   with exn ->
     Error (Repository.Storage ("Failed to decode users JSON: " ^ pp_exn exn))
 
+let json_item_text = function
+  | `String value -> value
+  | value -> Yojson.Basic.to_string value
+
 let parse_task_list json_text =
   try
     let json = Yojson.Basic.from_string json_text in
@@ -1135,7 +1168,7 @@ let parse_task_list json_text =
         let rec loop acc = function
           | [] -> Ok (List.rev acc)
           | item :: rest -> (
-              match parse_task (Yojson.Basic.to_string item) with
+              match parse_task (json_item_text item) with
               | Ok parsed -> loop (parsed :: acc) rest
               | Error _ as error -> error)
         in
@@ -1152,7 +1185,7 @@ let parse_submission_list json_text =
         let rec loop acc = function
           | [] -> Ok (List.rev acc)
           | item :: rest -> (
-              match parse_submission (Yojson.Basic.to_string item) with
+              match parse_submission (json_item_text item) with
               | Ok parsed -> loop (parsed :: acc) rest
               | Error _ as error -> error)
         in
@@ -1178,57 +1211,70 @@ let make (db : Caqti_lwt.connection) =
     | Ok ok -> next ok
   in
   let init_schema () =
-    let** () = run_exec Q.create_user_role_type () in
-    let** () = run_exec Q.create_task_type_type () in
-    let** () = run_exec Q.create_task_status_type () in
-    let** () = run_exec Q.create_task_visibility_type () in
-    let** () = run_exec Q.create_submission_verdict_type () in
-    let** () = run_exec Q.create_users_table () in
-    let** () = run_exec Q.add_users_email_column () in
-    let** () = run_exec Q.backfill_users_email () in
-    let** () = run_exec Q.set_users_email_not_null () in
-    let** () = run_exec Q.drop_users_password_salt_column () in
-    let** () = run_exec Q.add_users_verified_column () in
-    let** () = run_exec Q.backfill_users_verified () in
-    let** () = run_exec Q.add_users_ban_columns () in
-    let** () = run_exec Q.backfill_users_ban_columns () in
-    let** () = run_exec Q.set_users_ban_defaults () in
-    let** () = run_exec Q.migrate_users_role_to_enum () in
-    let** () = run_exec Q.set_users_role_defaults () in
-    let** () = run_exec Q.verify_admin_users () in
-    let** () = run_exec Q.set_users_verified_default () in
-    let** () = run_exec Q.set_users_verified_not_null () in
-    let** () = run_exec Q.migrate_users_created_at () in
-    let** () = run_exec Q.migrate_users_updated_at () in
-    let** () = run_exec Q.set_users_timestamp_defaults () in
-    let** () = run_exec Q.create_users_email_index () in
-    let** () = run_exec Q.create_sessions_table () in
-    let** () = run_exec Q.migrate_sessions_access_expires_at () in
-    let** () = run_exec Q.migrate_sessions_refresh_expires_at () in
-    let** () = run_exec Q.migrate_sessions_revoked_at () in
-    let** () = run_exec Q.migrate_sessions_created_at () in
-    let** () = run_exec Q.set_sessions_timestamp_defaults () in
-    let** () = run_exec Q.create_email_verifications_table () in
-    let** () = run_exec Q.migrate_email_verifications_expires_at () in
-    let** () = run_exec Q.migrate_email_verifications_consumed_at () in
-    let** () = run_exec Q.migrate_email_verifications_created_at () in
-    let** () = run_exec Q.set_email_verifications_timestamp_defaults () in
-    let** () = run_exec Q.create_tasks_table () in
-    let** () = run_exec Q.create_pg_trgm_extension () in
-    let** () = run_exec Q.create_tasks_indexes () in
-    let** () = run_exec Q.create_tasks_author_idx () in
-    let** () = run_exec Q.create_tasks_type_idx () in
-    let** () = run_exec Q.create_tasks_status_visibility_idx () in
-    let** () = run_exec Q.create_tasks_created_at_idx () in
-    let** () = run_exec Q.create_tasks_title_trgm_idx () in
-    let** () = run_exec Q.create_tasks_description_trgm_idx () in
-    let** () = run_exec Q.create_submissions_table () in
-    let** () = run_exec Q.create_submissions_task_id_idx () in
-    let** () = run_exec Q.create_submissions_user_id_idx () in
-    let** () = run_exec Q.create_submissions_task_user_created_at_idx () in
-    let** () = run_exec Q.create_submissions_verdict_idx () in
-    let** () = run_exec Q.create_submissions_created_at_idx () in
-    run_exec Q.create_submissions_pending_idx ()
+    let* lock_result = run_exec Q.acquire_schema_lock () in
+    match lock_result with
+    | Error _ as error -> Lwt.return error
+    | Ok () ->
+        let* result =
+          let** () = run_exec Q.create_user_role_type () in
+          let** () = run_exec Q.create_task_type_type () in
+          let** () = run_exec Q.create_task_status_type () in
+          let** () = run_exec Q.create_task_visibility_type () in
+          let** () = run_exec Q.create_submission_verdict_type () in
+          let** () = run_exec Q.create_users_table () in
+          let** () = run_exec Q.add_users_email_column () in
+          let** () = run_exec Q.backfill_users_email () in
+          let** () = run_exec Q.set_users_email_not_null () in
+          let** () = run_exec Q.drop_users_password_salt_column () in
+          let** () = run_exec Q.add_users_verified_column () in
+          let** () = run_exec Q.backfill_users_verified () in
+          let** () = run_exec Q.add_users_ban_columns () in
+          let** () = run_exec Q.backfill_users_ban_columns () in
+          let** () = run_exec Q.set_users_ban_defaults () in
+          let** () = run_exec Q.migrate_users_role_to_enum () in
+          let** () = run_exec Q.set_users_role_defaults () in
+          let** () = run_exec Q.verify_admin_users () in
+          let** () = run_exec Q.set_users_verified_default () in
+          let** () = run_exec Q.set_users_verified_not_null () in
+          let** () = run_exec Q.migrate_users_created_at () in
+          let** () = run_exec Q.migrate_users_updated_at () in
+          let** () = run_exec Q.set_users_timestamp_defaults () in
+          let** () = run_exec Q.create_users_email_index () in
+          let** () = run_exec Q.create_sessions_table () in
+          let** () = run_exec Q.migrate_sessions_access_expires_at () in
+          let** () = run_exec Q.migrate_sessions_refresh_expires_at () in
+          let** () = run_exec Q.migrate_sessions_revoked_at () in
+          let** () = run_exec Q.migrate_sessions_created_at () in
+          let** () = run_exec Q.set_sessions_timestamp_defaults () in
+          let** () = run_exec Q.create_email_verifications_table () in
+          let** () = run_exec Q.migrate_email_verifications_expires_at () in
+          let** () = run_exec Q.migrate_email_verifications_consumed_at () in
+          let** () = run_exec Q.migrate_email_verifications_created_at () in
+          let** () = run_exec Q.set_email_verifications_timestamp_defaults () in
+          let** () = run_exec Q.create_tasks_table () in
+          let** () = run_exec Q.create_pg_trgm_extension () in
+          let** () = run_exec Q.create_tasks_indexes () in
+          let** () = run_exec Q.create_tasks_author_idx () in
+          let** () = run_exec Q.create_tasks_type_idx () in
+          let** () = run_exec Q.create_tasks_status_visibility_idx () in
+          let** () = run_exec Q.create_tasks_created_at_idx () in
+          let** () = run_exec Q.create_tasks_title_trgm_idx () in
+          let** () = run_exec Q.create_tasks_description_trgm_idx () in
+          let** () = run_exec Q.create_submissions_table () in
+          let** () = run_exec Q.create_submissions_task_id_idx () in
+          let** () = run_exec Q.create_submissions_user_id_idx () in
+          let** () = run_exec Q.create_submissions_task_user_created_at_idx () in
+          let** () = run_exec Q.create_submissions_verdict_idx () in
+          let** () = run_exec Q.create_submissions_created_at_idx () in
+          run_exec Q.create_submissions_pending_idx ()
+        in
+        let* unlock_result = run_exec Q.release_schema_lock () in
+        begin
+          match result, unlock_result with
+          | Error _ as error, _ -> Lwt.return error
+          | Ok _, (Error _ as error) -> Lwt.return error
+          | Ok (), Ok () -> Lwt.return (Ok ())
+        end
   in
   let find_user_by_username username =
     let* result = Db.find_opt Q.find_user_by_username username in
@@ -1294,6 +1340,14 @@ let make (db : Caqti_lwt.connection) =
   in
   let mark_user_verified ~user_id ~updated_at =
     let* result = Db.find_opt Q.mark_user_verified (updated_at, user_id) in
+    Lwt.return
+      (match result with
+      | Ok None -> Ok None
+      | Ok (Some json) -> Result.map Option.some (parse_user json)
+      | Error error -> Error (map_caqti_error error))
+  in
+  let delete_user ~user_id =
+    let* result = Db.find_opt Q.delete_user user_id in
     Lwt.return
       (match result with
       | Ok None -> Ok None
@@ -1487,6 +1541,7 @@ let make (db : Caqti_lwt.connection) =
     find_email_verification_by_token;
     consume_email_verification;
     mark_user_verified;
+    delete_user;
     create_task;
     list_tasks;
     find_task_by_id;

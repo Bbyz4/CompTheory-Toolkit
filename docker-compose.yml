@@ -74,7 +74,7 @@ services:
 
   worker:
     <<: *runtime-image
-    command: ["/app/worker.exe"]
+    command: ["/app/worker"]
     depends_on:
       db:
         condition: service_healthy
@@ -84,11 +84,31 @@ services:
 
   web:
     <<: *runtime-image
-    command: ["/app/webapp.exe"]
+    command: ["/app/webapp"]
     depends_on:
       app:
         condition: service_started
     environment: *web-env
+
+  trafficd:
+    <<: *runtime-image
+    command:
+      [
+        "/app/trafficd",
+        "--base-url",
+        "${TRAFFICD_API_BASE_URL:-http://app:8080}",
+        "--seed",
+        "${TRAFFICD_SEED:-20260508}",
+        "--control-socket",
+        "${TRAFFICD_CONTROL_SOCKET:-/tmp/trafficd.sock}",
+        "--rate",
+        "${TRAFFICD_RATE:-3.0}",
+        "--report-every",
+        "${TRAFFICD_REPORT_EVERY:-100}",
+      ]
+    depends_on:
+      app:
+        condition: service_started
 
 volumes:
   pg_data:

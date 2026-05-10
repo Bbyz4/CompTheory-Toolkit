@@ -206,6 +206,45 @@ let make () =
         Hashtbl.replace state.users user_id next_user;
         Lwt.return (Ok (Some next_user))
   in
+  let delete_user ~user_id =
+    match user_by_id user_id with
+    | None -> Lwt.return (Ok None)
+    | Some user ->
+        Hashtbl.remove state.users user_id;
+        Hashtbl.remove state.usernames user.username;
+        Hashtbl.remove state.emails user.email;
+        Hashtbl.filter_map_inplace
+          (fun _id (session : Domain.session) ->
+            if session.user_id = user_id then None else Some session)
+          state.sessions;
+        Hashtbl.filter_map_inplace
+          (fun _token session_id ->
+            match session_by_id session_id with
+            | Some _ -> Some session_id
+            | None -> None)
+          state.access_index;
+        Hashtbl.filter_map_inplace
+          (fun _token session_id ->
+            match session_by_id session_id with
+            | Some _ -> Some session_id
+            | None -> None)
+          state.refresh_index;
+        Hashtbl.filter_map_inplace
+          (fun _id (verification : Domain.email_verification) ->
+            if verification.user_id = user_id then None else Some verification)
+          state.verifications;
+        Hashtbl.filter_map_inplace
+          (fun _token verification_id ->
+            match verification_by_id verification_id with
+            | Some _ -> Some verification_id
+            | None -> None)
+          state.verification_tokens;
+        Hashtbl.filter_map_inplace
+          (fun _id (submission : Domain.submission) ->
+            if submission.user_id = user_id then None else Some submission)
+          state.submissions;
+        Lwt.return (Ok (Some user))
+  in
   let create_task ~title ~slug ~short_description ~description ~type_ ~author_id
       ~difficulty ~config ~status ~visibility ~published_at ~created_at
       ~updated_at =
@@ -332,6 +371,7 @@ let make () =
     find_email_verification_by_token;
     consume_email_verification;
     mark_user_verified;
+    delete_user;
     create_task;
     list_tasks;
     find_task_by_id;

@@ -25,6 +25,16 @@ let int_field json name =
   | `Int value -> Ok value
   | _ -> Error (App_error.Bad_request ("Field \"" ^ name ^ "\" must be an int"))
 
+let optional_int_field json name =
+  match json |> member name with
+  | `Int value -> Ok (Some value)
+  | `Null -> Ok None
+  | `Assoc [] -> Ok None
+  | _ ->
+      Error
+        (App_error.Bad_request
+           ("Field \"" ^ name ^ "\" must be an int or null"))
+
 let json_field json name =
   match json |> member name with
   | `Null ->

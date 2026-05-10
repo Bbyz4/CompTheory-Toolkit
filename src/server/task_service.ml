@@ -157,7 +157,7 @@ let get_task_by_slug deps ~viewer ~slug =
       else error (App_error.Not_found "Task not found")
 
 let create_task deps ~admin_context ~title ~slug ~short_description ~description
-    ~type_ ~difficulty ~config ~status ~visibility =
+    ~type_ ?author_id ~difficulty ~config ~status ~visibility () =
   match
     ( validate_title title,
       resolve_slug ~title slug,
@@ -176,11 +176,16 @@ let create_task deps ~admin_context ~title ~slug ~short_description ~description
       let published_at =
         match status with Domain.Published -> Some now | _ -> None
       in
+      let author_id =
+        match author_id with
+        | Some value -> value
+        | None -> admin_context.Auth_service.user.id
+      in
       let* created =
         deps.repo.create_task ~title ~slug:normalized_slug
           ~short_description:(normalize_optional_string short_description)
-          ~description ~type_ ~author_id:admin_context.Auth_service.user.id
-          ~difficulty ~config:normalized_config ~status ~visibility ~published_at
+          ~description ~type_ ~author_id ~difficulty ~config:normalized_config
+          ~status ~visibility ~published_at
           ~created_at:now ~updated_at:now
       in
       match created with

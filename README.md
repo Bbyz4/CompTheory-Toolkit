@@ -1,72 +1,151 @@
 # CompTheory-Toolkit
 
-## Quick start
+OCaml application for auth, tasks and submissions, with:
+- API in Dream
+- web frontend
+- PostgreSQL
+- RabbitMQ-backed submission queue
+- worker judging submissions
+- `trafficd` for synthetic API traffic
+
+## Local Operation
+
+Deployment-like local usage is the default path. It mirrors the server workflow and generates local operational commands in `.local-deploy/state/.recognitarc`.
 
 ```bash
-cp .env.example .env
-make bootstrap
+./scripts/local_deploy.sh up
+source ./.local-deploy/state/.recognitarc
+recognita_compose ps
 ```
 
-Po starcie:
-
-- API: `http://localhost:8080`
-- health: `http://localhost:8080/health`
-- OpenAPI: `http://localhost:8080/openapi.json`
-- web: `http://localhost:8081`
+Default local endpoints:
+- app via nginx: `http://localhost:8080`
+- TLS via nginx: `https://localhost:8443`
 - Mailpit: `http://localhost:8025`
 - RabbitMQ management: `http://localhost:15672`
 
-## Przydatne komendy
+Useful operational commands after `source`:
 
 ```bash
-make up
-make down
-make logs
-make test
-make shell
-make run-api
-make run-web
-make run-worker
-./bin/admincli list-users
-./bin/admincli ban-user 2 --reason spam
-./bin/admincli promote-admin 2
+admincli list-users
+trafficd start
+trafficcli status
+trafficcli add-users 100
+trafficcli start
+trafficcli set-rate 20.0
+trafficcli pause
+recognita_compose logs -f app web worker
 ```
 
-## Tasks i submissions
+`./scripts/local_deploy.sh` also supports:
 
-- `POST /api/v1/tasks` tworzy taska; endpoint jest tylko dla admina.
-- `GET /api/v1/tasks` zwraca publiczne, opublikowane taski.
-- `GET /api/v1/task-types/MODEL_CONSTRUCTION/config-template` zwraca template configu.
-- `POST /api/v1/tasks/:id/submissions` zapisuje zgłoszenie jako `PENDING` i publikuje je do kolejki RabbitMQ.
-- worker (`apps/worker/worker.exe`) odbiera submissiony z kolejki po kolei i zapisuje mockowy, losowy werdykt.
+```bash
+./scripts/local_deploy.sh up
+./scripts/local_deploy.sh down
+./scripts/local_deploy.sh logs
+./scripts/local_deploy.sh ps
+./scripts/local_deploy.sh rebuild
+./scripts/local_deploy.sh source-line
+```
+
+## Dev Helper
+
+`./scripts/dev_helper.sh` is only a convenience wrapper for developers while changing code. It is not part of the deployment or operational path.
+
+Examples:
+
+```bash
+./scripts/dev_helper.sh build
+./scripts/dev_helper.sh test
+./scripts/dev_helper.sh runtest
+./scripts/dev_helper.sh dune build @all
+./scripts/dev_helper.sh dune runtest
+./scripts/dev_helper.sh shell
+./scripts/dev_helper.sh run-api
+./scripts/dev_helper.sh run-web
+./scripts/dev_helper.sh run-worker
+./scripts/dev_helper.sh run-trafficd
+./scripts/dev_helper.sh run-trafficcli
+```
+
+## API Shape
+
+Most important flows:
+- `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`
+- `GET /api/v1/me`, `DELETE /api/v1/me`
+- `GET /api/v1/tasks`
+- `GET /api/v1/tasks/slug/:slug`
+- `POST /api/v1/tasks` for admin task creation
+- `GET /api/v1/task-types/MODEL_CONSTRUCTION/config-template`
+- `POST /api/v1/tasks/:id/submissions`
+- `GET /api/v1/submissions`, `GET /api/v1/submissions/:id`
+
+Submission flow:
+- API stores submission as `PENDING`
+- API publishes submission id to RabbitMQ
+- worker consumes pending submissions and writes a mock verdict
+
+## Traffic
+
+`trafficd` is the only synthetic-traffic daemon:
+- starts paused
+- keeps state in memory
+- creates and removes users through the API
+- supports live rate changes
+
+Typical flow:
+
+```bash
+trafficd start
+trafficcli add-users 1000
+trafficcli start
+trafficcli set-rate 15.0
+trafficcli pause
+trafficcli remove-users 200
+```
+
+Test identities are generated deterministically with Faker.
 
 ## Deploy
 
+GitHub Actions builds and pushes three images:
+- app runtime
+- nginx
+- fail2ban
+
+Server deploy then does only:
+- copy compose files and cert-generation script
+- generate/update runtime env
+- generate/update `.recognitarc`
+- `docker compose pull`
+- `docker compose up -d`
+
+On the server, after deploy, shell commands come from `.recognitarc`:
+- `recognita_compose`
+- `admincli`
+- `trafficd`
+- `trafficcli`
+
+Minimal manual deploy shape:
+
 ```bash
 cp .env.deploy.example .env
-make deploy-cert
-make deploy-up
+./scripts/generate_deploy_cert.sh
+docker compose -f docker-compose.yml -f docker-compose.deploy.yml up --build -d
 ```
 
-GitHub Actions działa tylko na branchu `server`.
-Buduje obraz w GitHub Actions, wrzuca go do GHCR i na serwerze robi tylko `pull + up -d`.
-
-Do GitHub Secrets ustaw:
-
+Important GitHub secrets:
 - `SERVER_ADDRESS`
 - `SERVER_USERNAME`
 - `SERVER_PRIVATE_KEY`
 - `SECRET_CODE`
-- opcjonalnie `POSTGRES_PASSWORD`
-- opcjonalnie `ACCESS_GATE_COOKIE_SECRET`
-- opcjonalnie `GHCR_USERNAME` i `GHCR_TOKEN` jeśli pakiet w GHCR ma zostać prywatny
 
-Opcjonalnie ustaw GitHub Variable `SERVER_DEPLOY_DIR`.
-Domyślnie workflow używa katalogu `~/comp-theory-toolkit-deploy`.
-Opcjonalnie ustaw też `SERVER_PROJECT_NAME`, jeśli chcesz własną nazwę projektu compose.
-
-Opcjonalnie możesz też ustawić GitHub Variables:
-
+Common optional secrets/vars:
+- `POSTGRES_PASSWORD`
+- `ACCESS_GATE_COOKIE_SECRET`
+- `GHCR_USERNAME`, `GHCR_TOKEN`
+- `SERVER_DEPLOY_DIR`
+- `SERVER_PROJECT_NAME`
 - `NGINX_SERVER_NAME`
 - `APP_BASE_URL`
 - `PUBLIC_WEB_BASE_URL`
@@ -77,19 +156,3 @@ Opcjonalnie możesz też ustawić GitHub Variables:
 - `NGINX_ENABLE_TLS`
 - `POSTGRES_DB`
 - `POSTGRES_USER`
-
-Workflow sam:
-
-- tworzy katalog deployowy na serwerze
-- używa świeżego katalogu release dla każdej wersji
-- trzyma stan i certy osobno, poza katalogiem release
-- wysyła aktualne pliki compose i `infra/`
-- generuje i utrzymuje plik env na podstawie `.env.deploy.example`
-- zachowuje trwałe sekrety między deployami, jeśli nie podasz ich jawnie w GitHub Secrets
-- generuje self-signed cert, jeśli nie ma jeszcze certów originu
-
-Jeśli używasz prywatnego pakietu GHCR i nie podasz `GHCR_USERNAME` i `GHCR_TOKEN` w GitHub Secrets, to zrób na serwerze jednorazowo:
-
-```bash
-echo TOKEN | docker login ghcr.io -u USERNAME --password-stdin
-```

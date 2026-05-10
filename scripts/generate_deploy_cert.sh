@@ -5,7 +5,7 @@ root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root_dir"
 
 domain=${1:-${NGINX_SERVER_NAME:-recognita.xyz}}
-cert_dir="$root_dir/infra/nginx/certs"
+cert_dir=${RECOGNITA_CERT_DIR:-"$root_dir/infra/nginx/certs"}
 cert_file="$cert_dir/origin.crt"
 key_file="$cert_dir/origin.key"
 days=${TLS_CERT_DAYS:-365}

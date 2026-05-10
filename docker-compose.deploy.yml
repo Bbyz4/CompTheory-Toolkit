@@ -24,8 +24,16 @@ services:
       app:
         condition: service_started
 
+  trafficd:
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+
   nginx:
-    image: nginx:1.27-alpine
+    image: ${NGINX_IMAGE:-comp-theory-toolkit-nginx:dev}
+    pull_policy: always
     restart: unless-stopped
     depends_on:
       web:
@@ -41,14 +49,12 @@ services:
       NGINX_TLS_CERT_FILE: ${NGINX_TLS_CERT_FILE:-/etc/nginx/certs/origin.crt}
       NGINX_TLS_KEY_FILE: ${NGINX_TLS_KEY_FILE:-/etc/nginx/certs/origin.key}
     volumes:
-      - ./infra/nginx/default.http.conf.template:/opt/recognita-nginx/default.http.conf.template:ro
-      - ./infra/nginx/default.tls.conf.template:/opt/recognita-nginx/default.tls.conf.template:ro
-      - ./infra/nginx/docker-entrypoint.d/19-select-nginx-template.sh:/docker-entrypoint.d/19-select-nginx-template.sh:ro
-      - ./infra/nginx/certs:/etc/nginx/certs:ro
+      - ${NGINX_CERTS_DIR:-./infra/nginx/certs}:/etc/nginx/certs:ro
       - nginx_logs:/var/log/nginx
 
   fail2ban:
-    image: crazymax/fail2ban:latest
+    image: ${FAIL2BAN_IMAGE:-comp-theory-toolkit-fail2ban:dev}
+    pull_policy: always
     restart: unless-stopped
     network_mode: host
     cap_add:
@@ -62,8 +68,6 @@ services:
       F2B_LOG_LEVEL: INFO
       F2B_DB_PURGE_AGE: 7d
     volumes:
-      - ./infra/fail2ban/jail.d:/data/jail.d:ro
-      - ./infra/fail2ban/filter.d:/data/filter.d:ro
       - nginx_logs:/var/log/nginx:ro
       - fail2ban_data:/data/db
 

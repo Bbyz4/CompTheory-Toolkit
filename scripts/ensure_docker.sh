@@ -77,5 +77,9 @@ if docker info >/dev/null 2>&1; then
   exit 0
 fi
 
+if command -v sudo >/dev/null 2>&1 && sudo -n docker info >/dev/null 2>&1; then
+  exit 0
+fi
+
 print_daemon_help
 exit 1

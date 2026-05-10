@@ -153,6 +153,15 @@ let fallback =
           "200": { "description": "Current user profile" },
           "401": { "description": "Access token invalid" }
         }
+      },
+      "delete": {
+        "summary": "Delete the current user account",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Current user deleted" },
+          "401": { "description": "Access token invalid" },
+          "409": { "description": "User still owns tasks" }
+        }
       }
     },
     "/api/v1/users": {

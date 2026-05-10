@@ -157,8 +157,12 @@ let ratelimit_headers (decision : Rate_limiter.decision) =
     ("x-ratelimit-reset", Util.iso8601_of_unix_time decision.reset_at);
   ]
 
-let client_key request =
-  let client = Dream.client request in
+let client_key app request =
+  let client =
+    match app.config.mode, Dream.header request "x-recognita-test-client" with
+    | Runtime_mode.Local, Some value when String.trim value <> "" -> value
+    | _ -> Dream.client request
+  in
   match Util.split_once ~on:':' client with Some (host, _port) -> host | None -> client
 
 let rate_limit_middleware app inner request =
@@ -167,7 +171,7 @@ let rate_limit_middleware app inner request =
     inner request
   else
     let decision =
-      Rate_limiter.check app.rate_limiter ~key:(client_key request) ~path
+      Rate_limiter.check app.rate_limiter ~key:(client_key app request) ~path
     in
     let headers = ratelimit_headers decision in
     if not decision.allowed then
@@ -277,6 +281,18 @@ let make app =
         | Error app_error -> error_response app_error
         | Ok access_token -> (
             let* result = Auth_service.current_user deps ~access_token in
+            match result with
+            | Ok user -> json_response ~code:200 (user_json user)
+            | Error app_error -> error_response app_error))
+  in
+  let handle_delete_me request =
+    with_deps app request (fun deps ->
+        match access_token_from_request request with
+        | Error app_error -> error_response app_error
+        | Ok access_token -> (
+            let* result =
+              Auth_service.delete_current_user deps ~access_token
+            in
             match result with
             | Ok user -> json_response ~code:200 (user_json user)
             | Error app_error -> error_response app_error))
@@ -408,31 +424,33 @@ let make app =
                       Json_utils.optional_string_field json "short_description",
                       Json_utils.string_field json "description",
                       task_type_from_json json,
+                      Json_utils.optional_int_field json "author_id",
                       Json_utils.int_field json "difficulty",
                       Json_utils.object_field json "config",
                       task_status_from_json json,
                       task_visibility_from_json json
                     with
-                    | Ok _, Ok title, Ok slug, Ok short_description, Ok description, Ok type_, Ok difficulty, Ok config, Ok status, Ok visibility -> (
+                    | Ok _, Ok title, Ok slug, Ok short_description, Ok description, Ok type_, Ok author_id, Ok difficulty, Ok config, Ok status, Ok visibility -> (
                         let* result =
                           Task_service.create_task current_task_deps
                             ~admin_context ~title ~slug ~short_description
-                            ~description ~type_ ~difficulty ~config ~status
-                            ~visibility
+                            ~description ~type_ ?author_id ~difficulty ~config ~status
+                            ~visibility ()
                         in
                         match result with
                         | Ok task -> json_response ~code:201 (task_json task)
                         | Error app_error -> error_response app_error)
-                    | Error app_error, _, _, _, _, _, _, _, _, _
-                    | _, Error app_error, _, _, _, _, _, _, _, _
-                    | _, _, Error app_error, _, _, _, _, _, _, _
-                    | _, _, _, Error app_error, _, _, _, _, _, _
-                    | _, _, _, _, Error app_error, _, _, _, _, _
-                    | _, _, _, _, _, Error app_error, _, _, _, _
-                    | _, _, _, _, _, _, Error app_error, _, _, _
-                    | _, _, _, _, _, _, _, Error app_error, _, _
-                    | _, _, _, _, _, _, _, _, Error app_error, _
-                    | _, _, _, _, _, _, _, _, _, Error app_error ->
+                    | Error app_error, _, _, _, _, _, _, _, _, _, _
+                    | _, Error app_error, _, _, _, _, _, _, _, _, _
+                    | _, _, Error app_error, _, _, _, _, _, _, _, _
+                    | _, _, _, Error app_error, _, _, _, _, _, _, _
+                    | _, _, _, _, Error app_error, _, _, _, _, _, _
+                    | _, _, _, _, _, Error app_error, _, _, _, _, _
+                    | _, _, _, _, _, _, Error app_error, _, _, _, _
+                    | _, _, _, _, _, _, _, Error app_error, _, _, _
+                    | _, _, _, _, _, _, _, _, Error app_error, _, _
+                    | _, _, _, _, _, _, _, _, _, Error app_error, _
+                    | _, _, _, _, _, _, _, _, _, _, Error app_error ->
                         error_response app_error)))
   in
   let handle_task_config_template request =
@@ -540,6 +558,7 @@ let make app =
         Dream.post "/auth/logout" handle_logout;
         Dream.post "/auth/verify-email" handle_verify_email;
         Dream.get "/me" handle_me;
+        Dream.delete "/me" handle_delete_me;
         Dream.get "/users" handle_users;
         Dream.post "/users/:id/ban" handle_ban;
         Dream.post "/users/:id/unban" handle_unban;

@@ -64,6 +64,109 @@ let template =
           linear-gradient(180deg, #f7f2eb 0%, #f3ede6 100%);
       }
 
+      .landing-shell {
+        width: min(1180px, calc(100% - 32px));
+        margin: 22px auto 42px;
+      }
+
+      .landing-frame {
+        min-height: 720px;
+        display: grid;
+        grid-template-columns: 1.12fr 0.88fr;
+        border-radius: 32px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: rgba(255, 250, 244, 0.88);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(18px);
+      }
+
+      .landing-hero {
+        padding: 54px 56px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        background:
+          linear-gradient(155deg, rgba(255, 250, 244, 0.96), rgba(236, 230, 220, 0.78)),
+          linear-gradient(45deg, rgba(187, 109, 63, 0.08), rgba(64, 120, 90, 0.08));
+      }
+
+      .landing-panel {
+        padding: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(180deg, rgba(249, 245, 239, 0.9), rgba(255, 255, 255, 0.96));
+      }
+
+      .landing-card {
+        width: min(460px, 100%);
+        border-radius: 28px;
+        border: 1px solid rgba(31, 42, 48, 0.08);
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: 0 18px 40px rgba(24, 31, 36, 0.08);
+        padding: 24px;
+      }
+
+      .landing-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        width: fit-content;
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(31, 42, 48, 0.08);
+        background: rgba(255, 255, 255, 0.55);
+        color: var(--muted);
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .landing-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--success);
+        box-shadow: 0 0 0 6px rgba(64, 120, 90, 0.12);
+      }
+
+      .landing-title {
+        margin: 0 0 18px;
+        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+        font-size: clamp(3rem, 6vw, 5rem);
+        line-height: 0.95;
+        letter-spacing: -0.05em;
+      }
+
+      .landing-lead {
+        max-width: 480px;
+        font-size: 1.05rem;
+        line-height: 1.75;
+        color: var(--muted);
+      }
+
+      .quote-card {
+        margin-bottom: 22px;
+        padding: 28px;
+        border-radius: 28px;
+        border: 1px solid rgba(31, 42, 48, 0.08);
+        background: linear-gradient(180deg, rgba(250, 247, 242, 1), rgba(244, 237, 227, 0.82));
+      }
+
+      .quote-text {
+        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+        font-style: italic;
+        font-size: clamp(1.7rem, 4vw, 2.6rem);
+        line-height: 1.32;
+        color: #3b312c;
+      }
+
+      .quote-author {
+        margin-top: 16px;
+        color: var(--muted);
+      }
+
       a,
       button,
       input,
@@ -530,7 +633,82 @@ let template =
     </style>
   </head>
   <body>
-    <div class="page">
+    <main id="landing-shell" class="landing-shell">
+      <section class="landing-frame">
+        <div class="landing-hero">
+          <div>
+            <div class="landing-badge"><span class="landing-dot"></span> recognita.xyz</div>
+            <div style="height:34px;"></div>
+            <h1 class="landing-title">__SITE_NAME__</h1>
+            <p class="landing-lead">Sign in to enter your workspace. After login, the home screen shows your quote banner, task search, and your submission queues.</p>
+          </div>
+          <div class="card" style="background:rgba(255,255,255,0.58);">
+            <div class="section-eyebrow">What you get</div>
+            <p class="subtle" style="margin-top:14px;">
+              Search tasks by title, type and difficulty, open slug-based task pages, submit mock answers, and inspect your own queue. Admin users also get the global submissions view.
+            </p>
+          </div>
+        </div>
+
+        <div class="landing-panel">
+          <div class="landing-card">
+            <div class="section-eyebrow">Account</div>
+            <div class="auth-tabs">
+              <button id="tab-signin" class="nav-link active" type="button">Sign in</button>
+              <button id="tab-register" class="nav-link" type="button">Register</button>
+            </div>
+
+            <section id="pane-signin" class="auth-pane active">
+              <h3 style="margin-bottom:10px;">Welcome back</h3>
+              <form id="signin-form">
+                <label>
+                  Username
+                  <input id="signin-username" autocomplete="username" required />
+                </label>
+                <label>
+                  Password
+                  <input id="signin-password" type="password" autocomplete="current-password" required />
+                </label>
+                <button class="primary" type="submit">Sign in</button>
+              </form>
+              <div id="signin-message" class="message"></div>
+            </section>
+
+            <section id="pane-register" class="auth-pane">
+              <h3 style="margin-bottom:10px;">Create your account</h3>
+              <form id="register-form">
+                <label>
+                  Username
+                  <input id="register-username" autocomplete="username" required />
+                </label>
+                <label>
+                  Email
+                  <input id="register-email" type="email" autocomplete="email" required />
+                </label>
+                <label>
+                  Password
+                  <input id="register-password" type="password" autocomplete="new-password" required />
+                </label>
+                <button class="primary" type="submit">Register</button>
+              </form>
+              <div id="register-message" class="message"></div>
+            </section>
+
+            <section id="pane-verify" class="auth-pane">
+              <h3 style="margin-bottom:10px;">Verify your email</h3>
+              <p id="verify-copy" class="subtle">Confirm your email address.</p>
+              <form id="verify-form" style="max-width:320px;">
+                <button class="primary" type="submit">Verify email</button>
+                <button id="verify-back" class="ghost" type="button">Back home</button>
+              </form>
+              <div id="verify-message" class="message"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="app-shell" class="page" style="display:none;">
       <header class="topbar">
         <div class="brand-block">
           <h1 class="brand">__SITE_NAME__</h1>
@@ -538,14 +716,13 @@ let template =
         </div>
         <div class="topbar-actions">
           <div class="nav-row">
-            <button id="nav-home" class="nav-link active" type="button">Tasks</button>
+            <button id="nav-home" class="nav-link active" type="button">Home</button>
             <button id="nav-submissions" class="nav-link" type="button" style="display:none;">My submissions</button>
             <button id="nav-admin-submissions" class="nav-link" type="button" style="display:none;">Admin queue</button>
           </div>
           <div class="status-row">
-            <span id="role-pill" class="role-pill">Guest</span>
-            <button id="auth-shortcut" class="ghost" type="button">Sign in</button>
-            <button id="logout-button" class="ghost" type="button" style="display:none;">Sign out</button>
+            <span id="role-pill" class="role-pill">User</span>
+            <button id="logout-button" class="ghost" type="button">Sign out</button>
           </div>
         </div>
       </header>
@@ -554,130 +731,58 @@ let template =
         <div id="flash" class="flash"></div>
 
         <section id="view-home" class="view active">
-          <div class="home-grid">
-            <div class="card">
-              <div class="section-eyebrow">Discover</div>
-              <div class="view-head" style="margin-top:10px;">
-                <div>
-                  <h2>Task explorer</h2>
-                  <p class="lead">Browse public tasks, filter them by type and difficulty, and open details by slug-backed URLs.</p>
-                </div>
-                <button id="refresh-tasks" class="ghost" type="button">Refresh tasks</button>
-              </div>
+          <article class="quote-card">
+            <div class="quote-text">"Jeszcze nie dziala, ale moze bedzie"</div>
+            <div class="quote-author">Paulo Coelho</div>
+          </article>
 
-              <div class="filters">
-                <label class="filter">
-                  Search title
-                  <input id="filter-query" placeholder="e.g. automata, pumping lemma" />
-                </label>
-                <label class="filter">
-                  Type
-                  <select id="filter-type">
-                    <option value="">All types</option>
-                  </select>
-                </label>
-                <label class="filter">
-                  Min difficulty
-                  <input id="filter-min-difficulty" type="number" min="0" max="10" placeholder="0" />
-                </label>
-                <label class="filter">
-                  Max difficulty
-                  <input id="filter-max-difficulty" type="number" min="0" max="10" placeholder="10" />
-                </label>
-              </div>
-
-              <div id="tasks-meta" class="meta-line"></div>
-              <div id="tasks-list" class="task-list"></div>
-            </div>
-
-            <div class="sidebar-stack">
-              <article id="auth-card" class="card">
-                <div class="section-eyebrow">Account</div>
-                <div id="signed-out-panel">
-                  <h3 style="margin-top:10px;">Sign in or register</h3>
-                  <p class="subtle">Tasks are visible to everyone inside the web app. Signing in unlocks submissions and queues.</p>
-
-                  <div class="auth-tabs">
-                    <button id="tab-signin" class="nav-link active" type="button">Sign in</button>
-                    <button id="tab-register" class="nav-link" type="button">Register</button>
-                  </div>
-
-                  <section id="pane-signin" class="auth-pane active">
-                    <form id="signin-form">
-                      <label>
-                        Username
-                        <input id="signin-username" autocomplete="username" required />
-                      </label>
-                      <label>
-                        Password
-                        <input id="signin-password" type="password" autocomplete="current-password" required />
-                      </label>
-                      <button class="primary" type="submit">Sign in</button>
-                    </form>
-                    <div id="signin-message" class="message"></div>
-                  </section>
-
-                  <section id="pane-register" class="auth-pane">
-                    <form id="register-form">
-                      <label>
-                        Username
-                        <input id="register-username" autocomplete="username" required />
-                      </label>
-                      <label>
-                        Email
-                        <input id="register-email" type="email" autocomplete="email" required />
-                      </label>
-                      <label>
-                        Password
-                        <input id="register-password" type="password" autocomplete="new-password" required />
-                      </label>
-                      <button class="primary" type="submit">Register</button>
-                    </form>
-                    <div id="register-message" class="message"></div>
-                  </section>
-                </div>
-
-                <div id="signed-in-panel" style="display:none;">
-                  <h3 id="session-title" style="margin-top:10px;">Signed in</h3>
-                  <p id="session-copy" class="subtle"></p>
-                  <div class="quick-links">
-                    <button id="sidebar-my-submissions" class="soft" type="button">My submissions</button>
-                    <button id="sidebar-admin-submissions" class="soft" type="button" style="display:none;">Admin queue</button>
-                  </div>
-                </div>
-              </article>
-
-              <article id="admin-users-panel" class="card" style="display:none;">
-                <div class="view-head" style="margin-top:0;">
-                  <div>
-                    <div class="section-eyebrow">Moderation</div>
-                    <h3 style="margin-top:10px;">Users</h3>
-                    <p class="subtle">A lightweight moderation panel stays available for admin users.</p>
-                  </div>
-                  <button id="refresh-users" class="ghost" type="button">Refresh users</button>
-                </div>
-                <div id="admin-message" class="message"></div>
-                <div id="users-list" class="users-list"></div>
-              </article>
-            </div>
-          </div>
-        </section>
-
-        <section id="view-verify" class="view">
-          <div class="card">
-            <div class="section-eyebrow">Email verification</div>
+          <article class="card">
+            <div class="section-eyebrow">Explore</div>
             <div class="view-head" style="margin-top:10px;">
               <div>
-                <h2>Verify your email</h2>
-                <p id="verify-copy" class="lead">Confirm your email address.</p>
+                <h2>Task explorer</h2>
+                <p class="lead">This is your logged-in home. Filter tasks here, open a task by slug, and submit mock answers from the detail page.</p>
               </div>
-              <button id="verify-back" class="ghost" type="button">Back to tasks</button>
+              <button id="refresh-tasks" class="ghost" type="button">Refresh tasks</button>
             </div>
-            <form id="verify-form" style="max-width:320px;">
-              <button class="primary" type="submit">Verify email</button>
-            </form>
-            <div id="verify-message" class="message"></div>
-          </div>
+
+            <div class="filters">
+              <label class="filter">
+                Search title
+                <input id="filter-query" placeholder="e.g. automata, pumping lemma" />
+              </label>
+              <label class="filter">
+                Type
+                <select id="filter-type">
+                  <option value="">All types</option>
+                </select>
+              </label>
+              <label class="filter">
+                Min difficulty
+                <input id="filter-min-difficulty" type="number" min="0" max="10" placeholder="0" />
+              </label>
+              <label class="filter">
+                Max difficulty
+                <input id="filter-max-difficulty" type="number" min="0" max="10" placeholder="10" />
+              </label>
+            </div>
+
+            <div id="tasks-meta" class="meta-line"></div>
+            <div id="tasks-list" class="task-list"></div>
+          </article>
+
+          <article id="admin-users-panel" class="card" style="display:none; margin-top:22px;">
+            <div class="view-head" style="margin-top:0;">
+              <div>
+                <div class="section-eyebrow">Moderation</div>
+                <h3 style="margin-top:10px;">Users</h3>
+                <p class="subtle">The lightweight moderation panel remains available on the logged-in home page.</p>
+              </div>
+              <button id="refresh-users" class="ghost" type="button">Refresh users</button>
+            </div>
+            <div id="admin-message" class="message"></div>
+            <div id="users-list" class="users-list"></div>
+          </article>
         </section>
 
         <section id="view-task" class="view">
@@ -685,11 +790,11 @@ let template =
             <div class="view-head">
               <div>
                 <div class="section-eyebrow">Task</div>
-                <h2 id="task-title" style="margin-top:10px;">Loading task…</h2>
+                <h2 id="task-title" style="margin-top:10px;">Loading task...</h2>
                 <p id="task-subtitle" class="lead"></p>
               </div>
               <div class="inline-actions">
-                <button id="task-back" class="ghost" type="button">Back to tasks</button>
+                <button id="task-back" class="ghost" type="button">Back to home</button>
                 <button id="task-submit" class="primary" type="button">Submit</button>
               </div>
             </div>
@@ -751,25 +856,18 @@ let template =
       };
 
       const nodes = {
+        landingShell: document.getElementById("landing-shell"),
+        appShell: document.getElementById("app-shell"),
         flash: document.getElementById("flash"),
         rolePill: document.getElementById("role-pill"),
-        authShortcut: document.getElementById("auth-shortcut"),
         logoutButton: document.getElementById("logout-button"),
         navHome: document.getElementById("nav-home"),
         navSubmissions: document.getElementById("nav-submissions"),
         navAdminSubmissions: document.getElementById("nav-admin-submissions"),
         viewHome: document.getElementById("view-home"),
-        viewVerify: document.getElementById("view-verify"),
         viewTask: document.getElementById("view-task"),
         viewSubmissions: document.getElementById("view-submissions"),
         viewSubmissionDetail: document.getElementById("view-submission-detail"),
-        authCard: document.getElementById("auth-card"),
-        signedOutPanel: document.getElementById("signed-out-panel"),
-        signedInPanel: document.getElementById("signed-in-panel"),
-        sessionTitle: document.getElementById("session-title"),
-        sessionCopy: document.getElementById("session-copy"),
-        sidebarMySubmissions: document.getElementById("sidebar-my-submissions"),
-        sidebarAdminSubmissions: document.getElementById("sidebar-admin-submissions"),
         adminUsersPanel: document.getElementById("admin-users-panel"),
         refreshUsers: document.getElementById("refresh-users"),
         adminMessage: document.getElementById("admin-message"),
@@ -778,6 +876,7 @@ let template =
         tabRegister: document.getElementById("tab-register"),
         paneSignin: document.getElementById("pane-signin"),
         paneRegister: document.getElementById("pane-register"),
+        paneVerify: document.getElementById("pane-verify"),
         signinForm: document.getElementById("signin-form"),
         registerForm: document.getElementById("register-form"),
         signinMessage: document.getElementById("signin-message"),
@@ -876,7 +975,6 @@ let template =
       function setActiveView(viewName) {
         const allViews = [
           ["home", nodes.viewHome],
-          ["verify", nodes.viewVerify],
           ["task", nodes.viewTask],
           ["submissions", nodes.viewSubmissions],
           ["submission-detail", nodes.viewSubmissionDetail],
@@ -894,30 +992,20 @@ let template =
         nodes.navSubmissions.style.display = state.user ? "" : "none";
         nodes.navAdminSubmissions.style.display = isAdmin ? "" : "none";
         nodes.submissionsAll.style.display = isAdmin ? "" : "none";
-        nodes.sidebarAdminSubmissions.style.display = isAdmin ? "" : "none";
       }
 
       function updateSessionPanels() {
         const isLoggedIn = Boolean(state.user);
         const isAdmin = state.user?.role === "admin";
+        const route = parseRoute();
+        const landingMode = !isLoggedIn || route.name === "verify";
 
-        nodes.signedOutPanel.style.display = isLoggedIn ? "none" : "";
-        nodes.signedInPanel.style.display = isLoggedIn ? "" : "none";
+        nodes.landingShell.style.display = landingMode ? "" : "none";
+        nodes.appShell.style.display = isLoggedIn && route.name !== "verify" ? "" : "none";
         nodes.logoutButton.style.display = isLoggedIn ? "" : "none";
-        nodes.authShortcut.style.display = isLoggedIn ? "none" : "";
         nodes.adminUsersPanel.style.display = isAdmin ? "" : "none";
-
-        if (isLoggedIn) {
-          nodes.sessionTitle.textContent = "Signed in as " + state.user.username;
-          nodes.sessionCopy.textContent =
-            (state.user.verified ? "Verified account." : "Email not verified yet.") +
-            " Use the task pages to create mock submissions.";
-          nodes.rolePill.textContent = isAdmin ? "Admin" : "User";
-          nodes.rolePill.className = "role-pill" + (isAdmin ? " admin" : "");
-        } else {
-          nodes.rolePill.textContent = "Guest";
-          nodes.rolePill.className = "role-pill";
-        }
+        nodes.rolePill.textContent = isAdmin ? "Admin" : "User";
+        nodes.rolePill.className = "role-pill" + (isAdmin ? " admin" : "");
 
         updateNav();
       }
@@ -971,6 +1059,7 @@ let template =
         if (!response.ok) {
           clearSession();
           updateSessionPanels();
+          renderRoute();
           return false;
         }
         saveTokens(payload.tokens);
@@ -979,14 +1068,19 @@ let template =
 
       function setAuthTab(mode) {
         const signIn = mode === "signin";
+        const register = mode === "register";
+        const verify = mode === "verify";
+        nodes.tabSignin.style.display = verify ? "none" : "";
+        nodes.tabRegister.style.display = verify ? "none" : "";
         nodes.tabSignin.classList.toggle("active", signIn);
-        nodes.tabRegister.classList.toggle("active", !signIn);
+        nodes.tabRegister.classList.toggle("active", register);
         nodes.paneSignin.classList.toggle("active", signIn);
-        nodes.paneRegister.classList.toggle("active", !signIn);
+        nodes.paneRegister.classList.toggle("active", register);
+        nodes.paneVerify.classList.toggle("active", verify);
       }
 
       function scrollToAuth() {
-        nodes.authCard.scrollIntoView({ behavior: "smooth", block: "start" });
+        nodes.landingShell.scrollIntoView({ behavior: "smooth", block: "start" });
       }
 
       function resetTaskIndex(tasks) {
@@ -1163,6 +1257,7 @@ let template =
       }
 
       async function renderTaskDetail(slug) {
+        if (!requireUser()) return;
         setActiveView("task");
         clearFlash();
         setMessage(nodes.taskMessage, "Loading task...");
@@ -1417,7 +1512,7 @@ let template =
       }
 
       async function renderVerify() {
-        setActiveView("verify");
+        setAuthTab("verify");
         clearFlash();
         const token = new URLSearchParams(window.location.search).get("token");
         if (!token) {
@@ -1430,13 +1525,25 @@ let template =
       }
 
       async function renderRoute() {
-        updateSessionPanels();
         const route = parseRoute();
 
         if (route.name === "verify") {
+          updateSessionPanels();
           await renderVerify();
           return;
         }
+
+        if (!state.user) {
+          if (route.name !== "home") {
+            history.replaceState({}, "", "/");
+            setFlash("Sign in first to access the user workspace.", "error");
+          }
+          setAuthTab("signin");
+          updateSessionPanels();
+          return;
+        }
+
+        updateSessionPanels();
 
         if (route.name === "task") {
           await renderTaskDetail(route.slug);
@@ -1458,17 +1565,19 @@ let template =
 
         setActiveView("home");
         clearFlash();
-        renderTaskList();
+        try {
+          await loadTasks();
+          renderTaskList();
+        } catch (error) {
+          setFlash(error.message || "Could not load tasks.", "error");
+        }
+        if (state.user?.role === "admin") {
+          loadUsers();
+        }
         updateNav();
       }
 
       async function hydrateSession() {
-        try {
-          await loadTasks();
-        } catch (error) {
-          setFlash(error.message || "Could not load tasks.", "error");
-        }
-
         if (!state.accessToken) {
           updateSessionPanels();
           renderRoute();
@@ -1514,13 +1623,6 @@ let template =
       nodes.navHome.addEventListener("click", () => navigate("/"));
       nodes.navSubmissions.addEventListener("click", () => navigate("/submissions"));
       nodes.navAdminSubmissions.addEventListener("click", () => navigate("/admin/submissions"));
-      nodes.sidebarMySubmissions.addEventListener("click", () => navigate("/submissions"));
-      nodes.sidebarAdminSubmissions.addEventListener("click", () => navigate("/admin/submissions"));
-      nodes.authShortcut.addEventListener("click", () => {
-        navigate("/");
-        setAuthTab("signin");
-        setTimeout(scrollToAuth, 30);
-      });
       nodes.taskBack.addEventListener("click", () => navigate("/"));
       nodes.taskSubmit.addEventListener("click", () => submitCurrentTask());
       nodes.submissionsMine.addEventListener("click", () => navigate("/submissions"));
@@ -1561,7 +1663,7 @@ let template =
             loadUsers();
           }
           clearFlash();
-          renderRoute();
+          navigate("/");
         } catch (_error) {
           setMessage(nodes.signinMessage, "Network error while signing in.", "error");
         }
@@ -1590,7 +1692,7 @@ let template =
           setMessage(nodes.registerMessage, "Account created. Check your email for the verification link.", "success");
           updateSessionPanels();
           clearFlash();
-          renderRoute();
+          navigate("/");
         } catch (_error) {
           setMessage(nodes.registerMessage, "Network error while registering.", "error");
         }
