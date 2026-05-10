@@ -459,9 +459,9 @@ jobs:
           fi
 
           run_docker compose -p "$PROJECT_NAME" --env-file "$runtime_env" \
-            -f docker-compose.yml -f docker-compose.deploy.yml pull app web trafficd nginx fail2ban
+            -f docker-compose.yml -f docker-compose.deploy.yml pull app worker web trafficd nginx fail2ban
           run_docker compose -p "$PROJECT_NAME" --env-file "$runtime_env" \
-            -f docker-compose.yml -f docker-compose.deploy.yml up -d --no-build app web nginx fail2ban
+            -f docker-compose.yml -f docker-compose.deploy.yml up -d --no-build app worker web trafficd nginx fail2ban
           run_docker compose -p "$PROJECT_NAME" --env-file "$runtime_env" \
             -f docker-compose.yml -f docker-compose.deploy.yml exec -T db \
             env PGPASSWORD="$postgres_password" \

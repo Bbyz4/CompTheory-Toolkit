@@ -640,13 +640,6 @@ let template =
             <div class="landing-badge"><span class="landing-dot"></span> recognita.xyz</div>
             <div style="height:34px;"></div>
             <h1 class="landing-title">__SITE_NAME__</h1>
-            <p class="landing-lead">Sign in to enter your workspace. After login, the home screen shows your quote banner, task search, and your submission queues.</p>
-          </div>
-          <div class="card" style="background:rgba(255,255,255,0.58);">
-            <div class="section-eyebrow">What you get</div>
-            <p class="subtle" style="margin-top:14px;">
-              Search tasks by title, type and difficulty, open slug-based task pages, submit mock answers, and inspect your own queue. Admin users also get the global submissions view.
-            </p>
           </div>
         </div>
 
@@ -774,7 +767,6 @@ let template =
               <div>
                 <div class="section-eyebrow">Moderation</div>
                 <h3 style="margin-top:10px;">Users</h3>
-                <p class="subtle">The lightweight moderation panel remains available on the logged-in home page.</p>
               </div>
               <button id="refresh-users" class="ghost" type="button">Refresh users</button>
             </div>
