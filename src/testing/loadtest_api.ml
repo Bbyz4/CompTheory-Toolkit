@@ -88,6 +88,15 @@ let actor_of_identity ~user_id (identity : Mock_identity.person) =
     client_id = identity.client_id;
   }
 
+let make_actor ~username ~password ~client_id =
+  {
+    user_id = 0;
+    username;
+    email = "";
+    password;
+    client_id;
+  }
+
 let session_of_auth_json identity json =
   let open Yojson.Basic.Util in
   {
@@ -140,6 +149,9 @@ let login client (actor : actor) =
                 |> Yojson.Basic.Util.to_string;
             }
       | Error message, _ | _, Error message -> error message)
+
+let login_with_credentials client ~username ~password ~client_id =
+  login client (make_actor ~username ~password ~client_id)
 
 let logout client (session : session) =
   let* response =

@@ -18,9 +18,11 @@ x-app-env: &app-env
   SMTP_HOST: ${SMTP_HOST:-127.0.0.1}
   SMTP_PORT: ${SMTP_PORT:-1025}
   MAIL_FROM: ${MAIL_FROM:-no-reply@recognita.xyz}
+  RECOGNITA_ADMIN_USERNAME: ${RECOGNITA_ADMIN_USERNAME:-}
+  RECOGNITA_ADMIN_PASSWORD: ${RECOGNITA_ADMIN_PASSWORD:-}
   RABBITMQ_API_BASE_URL: ${RABBITMQ_API_BASE_URL:-http://rabbitmq:15672}
-  RABBITMQ_USER: ${RABBITMQ_USER:-guest}
-  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+  RABBITMQ_USER: ${RABBITMQ_USER:-recognita}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-recognita}
   RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
   RABBITMQ_SUBMISSION_QUEUE: ${RABBITMQ_SUBMISSION_QUEUE:-submissions.pending}
   SUBMISSION_WORKER_POLL_INTERVAL_SECONDS: ${SUBMISSION_WORKER_POLL_INTERVAL_SECONDS:-1}
@@ -54,8 +56,8 @@ services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-recognita}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-recognita}
       RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
@@ -92,6 +94,10 @@ services:
 
   trafficd:
     <<: *runtime-image
+    environment:
+      RECOGNITA_ADMIN_USERNAME: ${RECOGNITA_ADMIN_USERNAME:-}
+      RECOGNITA_ADMIN_PASSWORD: ${RECOGNITA_ADMIN_PASSWORD:-}
+      TRAFFICD_ADMIN_CLIENT_ID: ${TRAFFICD_ADMIN_CLIENT_ID:-trafficd-admin}
     command:
       [
         "/app/trafficd",

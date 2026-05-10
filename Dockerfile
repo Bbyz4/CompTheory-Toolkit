@@ -70,6 +70,7 @@ COPY --from=build /workspace/_build/default/apps/trafficd/trafficd.exe /app/traf
 COPY --from=build /workspace/_build/default/apps/web/webapp.exe /app/webapp
 COPY --from=build /workspace/_build/default/apps/worker/worker.exe /app/worker
 COPY --from=build /workspace/scripts/mock_identity_faker.py /app/scripts/mock_identity_faker.py
+COPY --from=build /workspace/scripts/mock_task_faker.py /app/scripts/mock_task_faker.py
 COPY --from=build /workspace/openapi /app/openapi
 COPY --from=build /workspace/sql /app/sql
 

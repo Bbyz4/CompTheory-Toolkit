@@ -712,7 +712,6 @@ let template =
       <header class="topbar">
         <div class="brand-block">
           <h1 class="brand">__SITE_NAME__</h1>
-          <div class="brand-subtitle">Comp theory tasks, queues, and submissions.</div>
         </div>
         <div class="topbar-actions">
           <div class="nav-row">
@@ -741,7 +740,6 @@ let template =
             <div class="view-head" style="margin-top:10px;">
               <div>
                 <h2>Task explorer</h2>
-                <p class="lead">This is your logged-in home. Filter tasks here, open a task by slug, and submit mock answers from the detail page.</p>
               </div>
               <button id="refresh-tasks" class="ghost" type="button">Refresh tasks</button>
             </div>
@@ -1328,10 +1326,7 @@ let template =
         nodes.submissionsList.innerHTML = "";
         nodes.submissionsList.classList.add("loading");
         nodes.submissionsTitle.textContent = scope === "all" ? "All submissions" : "My submissions";
-        nodes.submissionsCopy.textContent =
-          scope === "all"
-            ? "Admin view over the entire submissions queue."
-            : "Your personal queue of mock submissions.";
+        nodes.submissionsCopy.textContent = "";
         setMessage(nodes.submissionsMessage, "Loading submissions...");
         nodes.submissionsMine.classList.toggle("active", scope === "mine");
         nodes.submissionsAll.classList.toggle("active", scope === "all");

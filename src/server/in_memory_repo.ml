@@ -113,6 +113,32 @@ let make () =
         Hashtbl.replace state.users user_id next_user;
         Lwt.return (Ok (Some next_user))
   in
+  let update_bootstrap_admin ~user_id ~email ~password_hash ~updated_at =
+    match user_by_id user_id with
+    | None -> Lwt.return (Ok None)
+    | Some user ->
+        let normalized_email = String.trim email |> String.lowercase_ascii in
+        begin
+          if user.email <> normalized_email then (
+            Hashtbl.remove state.emails user.email;
+            Hashtbl.replace state.emails normalized_email user_id
+          )
+        end;
+        let next_user =
+          {
+            user with
+            email = normalized_email;
+            password_hash;
+            role = Domain.Admin;
+            verified = true;
+            is_banned = false;
+            ban_reason = None;
+            updated_at;
+          }
+        in
+        Hashtbl.replace state.users user_id next_user;
+        Lwt.return (Ok (Some next_user))
+  in
   let update_ban ~user_id ~is_banned ~ban_reason ~updated_at =
     match user_by_id user_id with
     | None -> Lwt.return (Ok None)
@@ -385,6 +411,7 @@ let make () =
     create_user;
     list_users;
     update_role;
+    update_bootstrap_admin;
     update_ban;
     create_session;
     find_session_by_access_token;

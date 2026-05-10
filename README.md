@@ -34,6 +34,7 @@ recognita-dbrw -c "select count(*) from submissions;"
 trafficd start
 trafficcli status
 trafficcli add-users 100
+trafficcli add-tasks 20
 trafficcli start
 trafficcli get-rates
 trafficcli set-rate submit 0.8
@@ -96,22 +97,27 @@ Submission flow:
 - starts paused
 - keeps state in memory
 - creates and removes users through the API
+- can create mock tasks through the API with Faker-generated content
 - cleans up created users on shutdown through the API
 - supports live per-operation rate changes
 - expresses all rates in requests per second
+- keeps synthetic users logged in; `login` rate means relogin
+
+Task creation uses the bootstrap admin configured through
+`RECOGNITA_ADMIN_USERNAME` and `RECOGNITA_ADMIN_PASSWORD`.
 
 Typical flow:
 
 ```bash
 trafficd start
 trafficcli add-users 1000
+trafficcli add-tasks 200
 trafficcli start
 trafficcli get-rates
 trafficcli set-rate list_tasks 2.0
 trafficcli set-rate view_task 1.2
 trafficcli set-rate login 0.4
 trafficcli set-rate submit 0.8
-trafficcli set-rate logout 0.2
 trafficcli pause
 trafficcli remove-users 200
 ```

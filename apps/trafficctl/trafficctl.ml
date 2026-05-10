@@ -14,14 +14,14 @@ let operation_pos_arg =
     required & pos 0 (some string) None
     & info [] ~docv:"OPERATION"
       ~doc:
-        "Traffic operation: list_tasks, view_task, login, submit, logout.")
+        "Traffic operation: list_tasks, view_task, login, submit.")
 
 let optional_operation_pos_arg =
   Cmdliner.Arg.(
     value & pos 0 (some string) None
     & info [] ~docv:"OPERATION"
       ~doc:
-        "Optional traffic operation: list_tasks, view_task, login, submit, logout.")
+        "Optional traffic operation: list_tasks, view_task, login, submit.")
 
 let count_pos_arg =
   Cmdliner.Arg.(
@@ -101,6 +101,19 @@ let add_users_cmd =
   in
   Cmdliner.Cmd.v (Cmdliner.Cmd.info "add-users" ~doc) term
 
+let add_tasks_cmd =
+  let doc =
+    "Create mock published tasks through the API using Faker-generated content."
+  in
+  let term =
+    Cmdliner.Term.(
+      const
+        (fun socket_path count ->
+          print_response socket_path (Printf.sprintf "add-tasks %d" count))
+      $ socket_arg $ count_pos_arg)
+  in
+  Cmdliner.Cmd.v (Cmdliner.Cmd.info "add-tasks" ~doc) term
+
 let remove_users_cmd =
   let doc = "Delete synthetic users through the API." in
   let term =
@@ -127,6 +140,7 @@ let cmd =
       get_rates_cmd;
       set_rate_cmd;
       add_users_cmd;
+      add_tasks_cmd;
       remove_users_cmd;
       stop_cmd;
     ]

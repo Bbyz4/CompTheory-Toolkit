@@ -21,6 +21,12 @@ type t = {
     role:Domain.role ->
     updated_at:float ->
     (Domain.user option, error) result Lwt.t;
+  update_bootstrap_admin :
+    user_id:int ->
+    email:string ->
+    password_hash:string ->
+    updated_at:float ->
+    (Domain.user option, error) result Lwt.t;
   update_ban :
     user_id:int ->
     is_banned:bool ->

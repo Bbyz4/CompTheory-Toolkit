@@ -763,6 +763,23 @@ module Q = struct
       |}
       ^ user_json)
 
+  let update_bootstrap_admin =
+    Caqti_type.(tup4 string string float int ->? string)
+      ({|
+        UPDATE users
+        SET
+          email = ?,
+          password_hash = ?,
+          role = 'ADMIN',
+          verified = TRUE,
+          is_banned = FALSE,
+          ban_reason = NULL,
+          updated_at = to_timestamp(?)
+        WHERE id = ?
+        RETURNING
+      |}
+      ^ user_json)
+
   let update_ban =
     Caqti_type.(tup4 bool (option string) float int ->? string)
       ({|
@@ -1368,6 +1385,17 @@ let make (db : Caqti_lwt.connection) =
       | Ok (Some json) -> Result.map Option.some (parse_user json)
       | Error error -> Error (map_caqti_error error))
   in
+  let update_bootstrap_admin ~user_id ~email ~password_hash ~updated_at =
+    let* result =
+      Db.find_opt Q.update_bootstrap_admin
+        (String.trim email |> String.lowercase_ascii, password_hash, updated_at, user_id)
+    in
+    Lwt.return
+      (match result with
+      | Ok None -> Ok None
+      | Ok (Some json) -> Result.map Option.some (parse_user json)
+      | Error error -> Error (map_caqti_error error))
+  in
   let update_ban ~user_id ~is_banned ~ban_reason ~updated_at =
     let* result =
       Db.find_opt Q.update_ban (is_banned, ban_reason, updated_at, user_id)
@@ -1571,6 +1599,7 @@ let make (db : Caqti_lwt.connection) =
     create_user;
     list_users;
     update_role;
+    update_bootstrap_admin;
     update_ban;
     create_session;
     find_session_by_access_token;

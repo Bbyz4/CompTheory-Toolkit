@@ -12,15 +12,19 @@ type operation =
   | View_task
   | Login
   | Submit
-  | Logout
 
 type state = {
   client : Loadtest_api.client;
   seed : int;
   report_every : int;
+  admin_username : string option;
+  admin_password : string option;
+  admin_client_id : string;
+  admin_session : Loadtest_api.session option ref;
   running : bool ref;
   stop_requested : bool ref;
   next_index : int ref;
+  next_task_index : int ref;
   users : synthetic_user list ref;
   cached_tasks : Loadtest_api.task list ref;
   ops_count : int ref;
@@ -28,33 +32,29 @@ type state = {
   view_task_rate : float ref;
   login_rate : float ref;
   submit_rate : float ref;
-  logout_rate : float ref;
 }
 
-let all_operations = [ List_tasks; View_task; Login; Submit; Logout ]
+let all_operations = [ List_tasks; View_task; Login; Submit ]
 
 let operation_name = function
   | List_tasks -> "list_tasks"
   | View_task -> "view_task"
   | Login -> "login"
   | Submit -> "submit"
-  | Logout -> "logout"
 
 let operation_of_string = function
   | "list_tasks" | "list-tasks" -> Some List_tasks
   | "view_task" | "view-task" | "open_task" | "open-task" -> Some View_task
   | "login" -> Some Login
   | "submit" -> Some Submit
-  | "logout" -> Some Logout
   | _ -> None
 
 let default_weights =
   [
     (List_tasks, 0.45);
     (View_task, 0.25);
-    (Login, 0.10);
+    (Login, 0.15);
     (Submit, 0.15);
-    (Logout, 0.05);
   ]
 
 let has_prefix ~prefix value =
@@ -67,7 +67,6 @@ let rate_ref state = function
   | View_task -> state.view_task_rate
   | Login -> state.login_rate
   | Submit -> state.submit_rate
-  | Logout -> state.logout_rate
 
 let current_rate state operation = !(rate_ref state operation)
 
@@ -111,9 +110,6 @@ let pick_random list =
   | [] -> None
   | _ -> Some (List.nth list (Random.int (List.length list)))
 
-let pick_random_user state predicate =
-  !(state.users) |> List.filter predicate |> pick_random
-
 let is_auth_error message =
   has_prefix ~prefix:"HTTP 401" message || has_prefix ~prefix:"HTTP 403" message
 
@@ -123,28 +119,12 @@ let register_user state index =
   match result with
   | Error _ as error -> Lwt.return error
   | Ok session ->
-      let* logout_result = Loadtest_api.logout state.client session in
-      begin
-        match logout_result with
-        | Ok () ->
-            Lwt.return
-              (Ok
-                 {
-                   actor = session.actor;
-                   session = None;
-                 })
-        | Error message ->
-            prerr_endline
-              (Printf.sprintf
-                 "trafficd register cleanup logout failed for %s: %s"
-                 session.actor.username message);
-            Lwt.return
-              (Ok
-                 {
-                   actor = session.actor;
-                   session = Some session;
-                 })
-      end
+      Lwt.return
+        (Ok
+           {
+             actor = session.actor;
+             session = Some session;
+           })
 
 let login_user state user =
   let* result = Loadtest_api.login state.client user.actor in
@@ -154,10 +134,49 @@ let login_user state user =
       Lwt.return (Ok session)
   | Error _ as error -> Lwt.return error
 
-let ensure_session_for_cleanup state user =
+let logout_user state user =
+  match user.session with
+  | None -> Lwt.return (Ok ())
+  | Some session ->
+      let* result = Loadtest_api.logout state.client session in
+      begin
+        match result with
+        | Ok () ->
+            user.session <- None;
+            Lwt.return (Ok ())
+        | Error message when is_auth_error message ->
+            user.session <- None;
+            Lwt.return (Ok ())
+        | Error _ as error -> Lwt.return error
+      end
+
+let ensure_live_session state user =
   match user.session with
   | Some session -> Lwt.return (Ok session)
   | None -> login_user state user
+
+let ensure_admin_session state =
+  match !(state.admin_session), state.admin_username, state.admin_password with
+  | Some session, _, _ -> Lwt.return (Ok session)
+  | None, Some username, Some password ->
+      let* result =
+        Loadtest_api.login_with_credentials state.client ~username ~password
+          ~client_id:state.admin_client_id
+      in
+      begin
+        match result with
+        | Ok session ->
+            state.admin_session := Some session;
+            Lwt.return (Ok session)
+        | Error _ as error -> Lwt.return error
+      end
+  | None, _, _ ->
+      Lwt.return
+        (Error
+           "trafficd add-tasks requires --admin-username and --admin-password")
+
+let ensure_session_for_cleanup state user =
+  ensure_live_session state user
 
 let delete_user state user =
   let* session_result = ensure_session_for_cleanup state user in
@@ -217,56 +236,128 @@ let perform_view_task state =
       end
 
 let perform_login state =
-  match pick_random_user state (fun user -> user.session = None) with
-  | None -> Lwt.return (Ok "login_skipped_no_logged_out_users")
+  match pick_random !(state.users) with
+  | None -> Lwt.return (Ok "login_skipped_no_users")
   | Some user ->
-      let* result = login_user state user in
-      match result with
-      | Ok _ -> Lwt.return (Ok "login")
-      | Error _ as error -> Lwt.return error
+      let* logout_result = logout_user state user in
+      begin
+        match logout_result with
+        | Error _ as error -> Lwt.return error
+        | Ok () ->
+            let* login_result = login_user state user in
+            match login_result with
+            | Ok _ -> Lwt.return (Ok "login_relogin")
+            | Error _ as error -> Lwt.return error
+      end
 
 let perform_submit state =
-  match pick_random_user state (fun user -> user.session <> None) with
-  | None -> Lwt.return (Ok "submit_skipped_no_logged_in_users")
+  match pick_random !(state.users) with
+  | None -> Lwt.return (Ok "submit_skipped_no_users")
   | Some user -> (
-      match user.session, pick_random !(state.cached_tasks) with
-      | None, _ -> Lwt.return (Ok "submit_skipped_no_logged_in_users")
-      | _, None -> Lwt.return (Ok "submit_skipped_no_tasks")
-      | Some session, Some task ->
-          let* result =
+      match pick_random !(state.cached_tasks) with
+      | None -> Lwt.return (Ok "submit_skipped_no_tasks")
+      | Some task ->
+          let submit_once session =
             Loadtest_api.submit state.client session ~task_id:task.id
               ~data:(`Assoc [])
           in
+          let* session_result = ensure_live_session state user in
           begin
-            match result with
-            | Ok _ -> Lwt.return (Ok "submit")
-            | Error message when is_auth_error message ->
-                user.session <- None;
-                Lwt.return (Ok "submit_session_expired")
-            | Error message when has_prefix ~prefix:"HTTP 404" message ->
-                state.cached_tasks := [];
-                Lwt.return (Ok "submit_stale_cache")
+            match session_result with
             | Error _ as error -> Lwt.return error
+            | Ok session ->
+                let* result = submit_once session in
+                begin
+                  match result with
+                  | Ok _ -> Lwt.return (Ok "submit")
+                  | Error message when is_auth_error message ->
+                      user.session <- None;
+                      let* relogin_result = login_user state user in
+                      begin
+                        match relogin_result with
+                        | Error _ as error -> Lwt.return error
+                        | Ok session ->
+                            let* retry_result = submit_once session in
+                            begin
+                              match retry_result with
+                              | Ok _ -> Lwt.return (Ok "submit_after_relogin")
+                              | Error _ as error -> Lwt.return error
+                            end
+                      end
+                  | Error message when has_prefix ~prefix:"HTTP 404" message ->
+                      state.cached_tasks := [];
+                      Lwt.return (Ok "submit_stale_cache")
+                  | Error _ as error -> Lwt.return error
+                end
           end)
 
-let perform_logout state =
-  match pick_random_user state (fun user -> user.session <> None) with
-  | None -> Lwt.return (Ok "logout_skipped_no_logged_in_users")
-  | Some user -> (
-      match user.session with
-      | None -> Lwt.return (Ok "logout_skipped_no_logged_in_users")
-      | Some session ->
-          let* result = Loadtest_api.logout state.client session in
-          begin
-            match result with
-            | Ok () ->
-                user.session <- None;
-                Lwt.return (Ok "logout")
-            | Error message when is_auth_error message ->
-                user.session <- None;
-                Lwt.return (Ok "logout_expired")
+let pick_zipf_user state =
+  match !(state.users) with
+  | [] -> None
+  | users ->
+      let indexed = Array.of_list users in
+      let total =
+        Array.fold_left
+          (fun acc index -> acc +. (1.0 /. float_of_int (index + 1)))
+          0.0 (Array.init (Array.length indexed) Fun.id)
+      in
+      let target = Random.float total in
+      let rec loop acc index =
+        if index >= Array.length indexed then
+          None
+        else
+          let next = acc +. (1.0 /. float_of_int (index + 1)) in
+          if target < next then Some indexed.(index) else loop next (index + 1)
+      in
+      loop 0.0 0
+
+let add_tasks state requested_count =
+  if requested_count < 0 then
+    Lwt.return "error add-tasks count must be non-negative"
+  else if !(state.users) = [] then
+    Lwt.return "error add-tasks requires at least one synthetic user"
+  else
+    let rec loop created attempts_left =
+      if created = requested_count || attempts_left <= 0 then
+        Lwt.return (Ok created)
+      else
+        let index = !(state.next_task_index) in
+        state.next_task_index := index + 1;
+        let spec = Mock_task.make ~seed:state.seed ~index in
+        match pick_zipf_user state with
+        | None -> Lwt.return (Ok created)
+        | Some author -> (
+            let* admin_result = ensure_admin_session state in
+            match admin_result with
             | Error _ as error -> Lwt.return error
-          end)
+            | Ok admin_session ->
+                let* result =
+                  Loadtest_api.create_task state.client admin_session
+                    ~client_id:state.admin_client_id ~author_id:author.actor.user_id
+                    ~title:spec.title ~description:spec.description
+                    ~difficulty:spec.difficulty ()
+                in
+                match result with
+                | Ok task ->
+                    state.cached_tasks := task :: !(state.cached_tasks);
+                    loop (created + 1) (attempts_left - 1)
+                | Error message when is_auth_error message ->
+                    state.admin_session := None;
+                    loop created (attempts_left - 1)
+                | Error message ->
+                    prerr_endline
+                      (Printf.sprintf "trafficd add-task failed at index=%d: %s"
+                         index message);
+                    loop created (attempts_left - 1))
+    in
+    let attempts = max (requested_count * 10) 50 in
+    let* result = loop 0 attempts in
+    match result with
+    | Error message -> Lwt.return ("error " ^ message)
+    | Ok created ->
+        Lwt.return
+          (Printf.sprintf "ok added_tasks %d cached_tasks %d next_task_index %d"
+             created (List.length !(state.cached_tasks)) !(state.next_task_index))
 
 let choose_operation state =
   let total = total_rate state in
@@ -292,7 +383,6 @@ let run_once state =
         | View_task -> perform_view_task state
         | Login -> perform_login state
         | Submit -> perform_submit state
-        | Logout -> perform_logout state
       in
       match result with
       | Ok label -> Lwt.return label
@@ -408,6 +498,10 @@ let handle_command state command =
       match int_of_string_opt value with
       | None -> Lwt.return "error add-users count must be an integer"
       | Some count -> add_users state count)
+  | [ "add-tasks"; value ] -> (
+      match int_of_string_opt value with
+      | None -> Lwt.return "error add-tasks count must be an integer"
+      | Some count -> add_tasks state count)
   | [ "remove-users"; value ] -> (
       match int_of_string_opt value with
       | None -> Lwt.return "error remove-users count must be an integer"
@@ -438,6 +532,15 @@ let cleanup_users state =
         end
   in
   let* removed, failed = loop 0 0 existing in
+  let* () =
+    match !(state.admin_session) with
+    | None -> Lwt.return_unit
+    | Some session ->
+        state.admin_session := None;
+        let* _ = Loadtest_api.logout state.client session in
+        Lwt.return_unit
+  in
+  state.cached_tasks := [];
   Printf.printf
     "trafficd cleanup removed_users=%d failed=%d remaining=%d\n%!" removed
     failed (List.length !(state.users));
@@ -454,15 +557,21 @@ let initialize_rates state total =
     (fun (operation, weight) -> set_rate state operation (weight *. scale))
     default_weights
 
-let run ~base_url ~seed ~rate ~report_every ~control_socket =
+let run ~base_url ~seed ~rate ~report_every ~control_socket ~admin_username
+    ~admin_password ~admin_client_id =
   let state =
     {
       client = Loadtest_api.make ~base_url;
       seed;
       report_every;
+      admin_username;
+      admin_password;
+      admin_client_id;
+      admin_session = ref None;
       running = ref false;
       stop_requested = ref false;
       next_index = ref 1;
+      next_task_index = ref 1;
       users = ref [];
       cached_tasks = ref [];
       ops_count = ref 0;
@@ -470,7 +579,6 @@ let run ~base_url ~seed ~rate ~report_every ~control_socket =
       view_task_rate = ref 0.0;
       login_rate = ref 0.0;
       submit_rate = ref 0.0;
-      logout_rate = ref 0.0;
     }
   in
   initialize_rates state rate;
@@ -533,17 +641,50 @@ let control_socket_arg =
     & info [ "control-socket" ] ~docv:"PATH"
       ~doc:"Unix socket used to control trafficd while it is running.")
 
+let admin_username_arg =
+  Cmdliner.Arg.(
+    value
+    & opt (some string)
+        (match Sys.getenv_opt "TRAFFICD_ADMIN_USERNAME" with
+        | Some value when String.trim value <> "" -> Some value
+        | _ -> Sys.getenv_opt "RECOGNITA_ADMIN_USERNAME")
+    & info [ "admin-username" ] ~docv:"USERNAME"
+      ~doc:"Optional admin username used for add-tasks through the API.")
+
+let admin_password_arg =
+  Cmdliner.Arg.(
+    value
+    & opt (some string)
+        (match Sys.getenv_opt "TRAFFICD_ADMIN_PASSWORD" with
+        | Some value when String.trim value <> "" -> Some value
+        | _ -> Sys.getenv_opt "RECOGNITA_ADMIN_PASSWORD")
+    & info [ "admin-password" ] ~docv:"PASSWORD"
+      ~doc:"Optional admin password used for add-tasks through the API.")
+
+let admin_client_id_arg =
+  Cmdliner.Arg.(
+    value
+    & opt string
+        (match Sys.getenv_opt "TRAFFICD_ADMIN_CLIENT_ID" with
+        | Some value when String.trim value <> "" -> value
+        | _ -> "trafficd-admin")
+    & info [ "admin-client-id" ] ~docv:"CLIENT_ID"
+      ~doc:"Client id used by trafficd when logging in as the admin user.")
+
 let cmd =
   let doc = "Stateful OCaml daemon for synthetic Poisson API traffic." in
   let term =
     Cmdliner.Term.(
       const
-        (fun base_url seed rate report_every control_socket ->
+        (fun base_url seed rate report_every control_socket admin_username
+             admin_password admin_client_id ->
           Random.self_init ();
           Lwt_main.run
-            (run ~base_url ~seed ~rate ~report_every ~control_socket))
+            (run ~base_url ~seed ~rate ~report_every ~control_socket
+               ~admin_username ~admin_password ~admin_client_id))
       $ base_url_arg $ seed_arg $ rate_arg $ report_every_arg
-      $ control_socket_arg)
+      $ control_socket_arg $ admin_username_arg $ admin_password_arg
+      $ admin_client_id_arg)
   in
   Cmdliner.Cmd.v (Cmdliner.Cmd.info "trafficd" ~doc) term
 
