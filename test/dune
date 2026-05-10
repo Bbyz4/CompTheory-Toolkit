@@ -1,6 +1,7 @@
 (executable
  (name test_main)
- (libraries toolkit unix lwt.unix yojson dream))
+ (libraries toolkit unix lwt.unix yojson dream caqti-lwt
+   caqti-driver-postgresql uri))
 
 (rule
  (alias runtest)

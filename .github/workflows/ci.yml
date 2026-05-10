@@ -18,6 +18,23 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPAMSOLVERTIMEOUT: 300
+      RUN_DB_INTEGRATION_TESTS: "1"
+      DATABASE_URL: postgresql://toolkit:toolkit@127.0.0.1:5432/toolkit
+      TEST_DATABASE_ADMIN_URL: postgresql://toolkit:toolkit@127.0.0.1:5432/postgres
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: toolkit
+          POSTGRES_USER: toolkit
+          POSTGRES_PASSWORD: toolkit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U toolkit -d toolkit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -209,6 +226,7 @@ jobs:
             docker-compose.deploy.yml \
             .env.deploy.example \
             scripts/generate_deploy_cert.sh \
+            scripts/provision_db_access.sql \
           | ssh "${SERVER_USERNAME}@${SERVER_ADDRESS}" \
             "set -eu; RELEASE_DIR=$(quote "$release_dir"); tar -xzf - -C \"\$RELEASE_DIR\""
 
@@ -424,38 +442,8 @@ jobs:
             -v DBRO_PASSWORD="$dbro_password" \
             -v DBRW_USER="$dbrw_user" \
             -v DBRW_PASSWORD="$dbrw_password" \
-            -U "$postgres_user" -d "$postgres_db" <<'SQL'
-          DO $do$
-          BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'DBRO_USER') THEN
-              EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', :'DBRO_USER', :'DBRO_PASSWORD');
-            ELSE
-              EXECUTE format('ALTER ROLE %I LOGIN PASSWORD %L', :'DBRO_USER', :'DBRO_PASSWORD');
-            END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'DBRW_USER') THEN
-              EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', :'DBRW_USER', :'DBRW_PASSWORD');
-            ELSE
-              EXECUTE format('ALTER ROLE %I LOGIN PASSWORD %L', :'DBRW_USER', :'DBRW_PASSWORD');
-            END IF;
-          END
-          $do$;
-
-          SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'APP_DB_NAME', :'DBRO_USER') \gexec
-          SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'APP_DB_NAME', :'DBRW_USER') \gexec
-          GRANT USAGE ON SCHEMA public TO :"DBRO_USER", :"DBRW_USER";
-          GRANT SELECT ON ALL TABLES IN SCHEMA public TO :"DBRO_USER";
-          GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO :"DBRO_USER";
-          GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO :"DBRW_USER";
-          GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO :"DBRW_USER";
-          ALTER DEFAULT PRIVILEGES FOR ROLE :"APP_DB_OWNER" IN SCHEMA public
-            GRANT SELECT ON TABLES TO :"DBRO_USER";
-          ALTER DEFAULT PRIVILEGES FOR ROLE :"APP_DB_OWNER" IN SCHEMA public
-            GRANT SELECT ON SEQUENCES TO :"DBRO_USER";
-          ALTER DEFAULT PRIVILEGES FOR ROLE :"APP_DB_OWNER" IN SCHEMA public
-            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"DBRW_USER";
-          ALTER DEFAULT PRIVILEGES FOR ROLE :"APP_DB_OWNER" IN SCHEMA public
-            GRANT USAGE, SELECT ON SEQUENCES TO :"DBRW_USER";
-          SQL
+            -U "$postgres_user" -d "$postgres_db" \
+            -f - < scripts/provision_db_access.sql
 
           ln -sfn "$RELEASE_DIR" "$DEPLOY_ROOT/current"
           cat > "$recognita_rc" <<EOFRC

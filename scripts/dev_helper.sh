@@ -35,7 +35,7 @@ case "$command" in
     exec ./bin/dev dune build @all "$@"
     ;;
   test|runtest)
-    exec ./bin/dev dune runtest "$@"
+    exec ./bin/dev env RUN_DB_INTEGRATION_TESTS=1 dune runtest "$@"
     ;;
   shell)
     exec ./bin/dev "$@"

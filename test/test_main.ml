@@ -1,5 +1,7 @@
 open Yojson.Basic.Util
 
+let ( let* ) = Lwt.bind
+
 exception Test_failure of string
 
 let fail message = raise (Test_failure message)
@@ -148,6 +150,74 @@ let unwrap_ok result = unwrap_result (fun message -> message) result
 
 let unwrap_repo_ok result =
   unwrap_result Toolkit.Repository.error_message result
+
+let db_integration_enabled () =
+  match Sys.getenv_opt "RUN_DB_INTEGRATION_TESTS" with
+  | Some ("1" | "true" | "TRUE" | "yes" | "YES") -> true
+  | _ -> false
+
+let integration_database_url () =
+  match Sys.getenv_opt "DATABASE_URL" with
+  | Some value -> value
+  | None -> "postgresql://toolkit:toolkit@127.0.0.1:5432/toolkit"
+
+let integration_admin_database_url () =
+  match Sys.getenv_opt "TEST_DATABASE_ADMIN_URL" with
+  | Some value -> value
+  | None ->
+      let uri = Uri.of_string (integration_database_url ()) in
+      Uri.with_path uri "/postgres" |> Uri.to_string
+
+let sql_identifier value =
+  let valid_char = function
+    | 'a' .. 'z' | '0' .. '9' | '_' -> true
+    | _ -> false
+  in
+  if String.length value = 0 || not (String.for_all valid_char value) then
+    fail ("Unsafe SQL identifier: " ^ value)
+  else
+    value
+
+let connect_or_fail db_url handler =
+  let connected = Lwt_main.run (Caqti_lwt.connect (Uri.of_string db_url)) in
+  match connected with
+  | Error error ->
+      fail ("Failed to connect to test database: " ^ Caqti_error.show error)
+  | Ok connection -> Lwt_main.run (handler connection)
+
+let exec_sql_or_fail connection sql =
+  let module Db = (val connection : Caqti_lwt.CONNECTION) in
+  let open Caqti_request.Infix in
+  let request = Caqti_type.(unit ->. unit) sql in
+  let* result = Db.exec request () in
+  match result with
+  | Ok () -> Lwt.return_unit
+  | Error error -> fail ("SQL execution failed: " ^ Caqti_error.show error)
+
+let with_postgres_repo test_fn =
+  let admin_url = integration_admin_database_url () in
+  let template_uri = Uri.of_string (integration_database_url ()) in
+  let db_name =
+    sql_identifier
+      (Printf.sprintf "recognita_test_%d_%d" (Unix.getpid ())
+         (Random.bits () land 0x3fffffff))
+  in
+  let db_url = Uri.with_path template_uri ("/" ^ db_name) |> Uri.to_string in
+  connect_or_fail admin_url (fun admin_connection ->
+      exec_sql_or_fail admin_connection ("CREATE DATABASE " ^ db_name));
+  Fun.protect
+    ~finally:(fun () ->
+      connect_or_fail admin_url (fun admin_connection ->
+          exec_sql_or_fail admin_connection
+            ("DROP DATABASE IF EXISTS " ^ db_name ^ " WITH (FORCE)")))
+    (fun () ->
+      let clock_ref = ref 1_700_000_000. in
+      let clock = Toolkit.Clock.make (fun () -> !clock_ref) in
+      connect_or_fail db_url (fun connection ->
+          let repo = Toolkit.Caqti_repo.make connection in
+          let* init_result = repo.init_schema () in
+          ignore (unwrap_repo_ok init_result);
+          test_fn repo clock))
 
 let register fixture username email password =
   request fixture ~meth:`POST ~target:"/api/v1/auth/register"
@@ -883,6 +953,188 @@ let test_admin_cli_promotes_user_to_admin () =
   | Toolkit.Admin_cli.User_banned _ ->
       fail "Admin CLI promote returned the wrong outcome variant"
 
+let test_caqti_repo_user_roundtrip () =
+  with_postgres_repo (fun repo clock ->
+      let now = clock.now () in
+      let created_user =
+        repo.create_user ~username:"db_zoe" ~email:"db_zoe@example.com"
+          ~password_hash:(Toolkit.Password.make "password123")
+          ~role:Toolkit.Domain.User ~created_at:now
+      in
+      let created_user = Lwt.map unwrap_repo_ok created_user in
+      let* created_user = created_user in
+      let* found_by_username = repo.find_user_by_username "db_zoe" in
+      let found_by_username = unwrap_repo_ok found_by_username in
+      let* found_by_email = repo.find_user_by_email "db_zoe@example.com" in
+      let found_by_email = unwrap_repo_ok found_by_email in
+      let* created_session =
+        repo.create_session ~user_id:created_user.id ~access_token:"db-access"
+          ~refresh_token:"db-refresh" ~access_expires_at:(now +. 300.)
+          ~refresh_expires_at:(now +. 600.) ~created_at:now
+      in
+      let created_session = unwrap_repo_ok created_session in
+      let* found_session = repo.find_session_by_access_token "db-access" in
+      let found_session = unwrap_repo_ok found_session in
+      assert_true
+        (Option.map
+           (fun (user : Toolkit.Domain.user) -> user.id)
+           found_by_username
+        = Some created_user.id)
+        "Caqti repo should find the created user by username";
+      assert_true
+        (Option.map
+           (fun (user : Toolkit.Domain.user) -> user.id)
+           found_by_email
+        = Some created_user.id)
+        "Caqti repo should find the created user by email";
+      assert_true
+        (Option.map
+           (fun (session : Toolkit.Domain.session) -> session.id)
+           found_session
+        = Some created_session.id)
+        "Caqti repo should find the created session by access token";
+      Lwt.return_unit)
+
+let test_caqti_repo_task_and_submission_roundtrip () =
+  with_postgres_repo (fun repo clock ->
+      let now = clock.now () in
+      let* author =
+        repo.create_user ~username:"db_author"
+          ~email:"db_author@example.com"
+          ~password_hash:(Toolkit.Password.make "password123")
+          ~role:Toolkit.Domain.Admin ~created_at:now
+      in
+      let author = unwrap_repo_ok author in
+      let* submitter =
+        repo.create_user ~username:"db_submitter"
+          ~email:"db_submitter@example.com"
+          ~password_hash:(Toolkit.Password.make "password123")
+          ~role:Toolkit.Domain.User ~created_at:(now +. 1.)
+      in
+      let submitter = unwrap_repo_ok submitter in
+      let config =
+        `Assoc
+          [
+            ("version", `Int 1);
+            ("grader", `Assoc [ ("kind", `String "mock") ]);
+          ]
+      in
+      let* task =
+        repo.create_task ~title:"Database task" ~slug:(Some "database-task")
+          ~short_description:(Some "Short description")
+          ~description:"Task body"
+          ~type_:Toolkit.Domain.Model_construction ~author_id:author.id
+          ~difficulty:4 ~config ~status:Toolkit.Domain.Published
+          ~visibility:Toolkit.Domain.Public ~published_at:(Some now)
+          ~created_at:now ~updated_at:now
+      in
+      let task = unwrap_repo_ok task in
+      let* found_task = repo.find_task_by_slug "database-task" in
+      let found_task = unwrap_repo_ok found_task in
+      let* listed_tasks = repo.list_tasks () in
+      let listed_tasks = unwrap_repo_ok listed_tasks in
+      let* submission =
+        repo.create_submission ~task_id:task.id ~user_id:submitter.id
+          ~data:(`Assoc [ ("answer", `String "candidate") ])
+          ~created_at:(now +. 2.)
+      in
+      let submission = unwrap_repo_ok submission in
+      let* listed_submissions = repo.list_submissions_by_user ~user_id:submitter.id in
+      let listed_submissions = unwrap_repo_ok listed_submissions in
+      let* updated_submission =
+        repo.update_submission_result ~submission_id:submission.id
+          ~verdict:Toolkit.Domain.Accepted
+          ~run_data:
+            (Some (`Assoc [ ("score", `Int 100); ("worker", `String "test") ]))
+          ~judged_at:(now +. 3.)
+      in
+      let updated_submission = unwrap_repo_ok updated_submission in
+      assert_true
+        (Option.map
+           (fun (current : Toolkit.Domain.task) -> current.id)
+           found_task
+        = Some task.id)
+        "Caqti repo should find the created task by slug";
+      assert_true
+        (List.exists
+           (fun (current : Toolkit.Domain.task) -> current.id = task.id)
+           listed_tasks)
+        "Caqti repo should list the created task";
+      assert_true
+        (List.exists
+           (fun (current : Toolkit.Domain.submission) -> current.id = submission.id)
+           listed_submissions)
+        "Caqti repo should list the created submission for the user";
+      begin
+        match updated_submission with
+        | Some current ->
+            assert_true
+              (current.verdict = Toolkit.Domain.Accepted)
+              "Caqti repo should update the submission verdict";
+            assert_true
+              (current.judged_at <> None)
+              "Caqti repo should set judged_at on updated submissions"
+        | None -> fail "Expected updated submission to be returned"
+      end;
+      Lwt.return_unit)
+
+let test_caqti_repo_delete_user_cascades () =
+  with_postgres_repo (fun repo clock ->
+      let now = clock.now () in
+      let* author =
+        repo.create_user ~username:"db_cascade_author"
+          ~email:"db_cascade_author@example.com"
+          ~password_hash:(Toolkit.Password.make "password123")
+          ~role:Toolkit.Domain.Admin ~created_at:now
+      in
+      let author = unwrap_repo_ok author in
+      let* submitter =
+        repo.create_user ~username:"db_cascade_submitter"
+          ~email:"db_cascade_submitter@example.com"
+          ~password_hash:(Toolkit.Password.make "password123")
+          ~role:Toolkit.Domain.User ~created_at:(now +. 1.)
+      in
+      let submitter = unwrap_repo_ok submitter in
+      let* task =
+        repo.create_task ~title:"Cascade task" ~slug:(Some "cascade-task")
+          ~short_description:None ~description:"Cascade task body"
+          ~type_:Toolkit.Domain.Model_construction ~author_id:author.id
+          ~difficulty:2
+          ~config:
+            (`Assoc
+              [
+                ("version", `Int 1);
+                ("grader", `Assoc [ ("kind", `String "mock") ]);
+              ])
+          ~status:Toolkit.Domain.Published ~visibility:Toolkit.Domain.Public
+          ~published_at:(Some now) ~created_at:now ~updated_at:now
+      in
+      let task = unwrap_repo_ok task in
+      let* submission =
+        repo.create_submission ~task_id:task.id ~user_id:submitter.id
+          ~data:(`Assoc []) ~created_at:(now +. 2.)
+      in
+      let submission = unwrap_repo_ok submission in
+      let* deleted_user = repo.delete_user ~user_id:author.id in
+      let deleted_user = unwrap_repo_ok deleted_user in
+      let* found_task = repo.find_task_by_id task.id in
+      let found_task = unwrap_repo_ok found_task in
+      let* found_submission = repo.find_submission_by_id submission.id in
+      let found_submission = unwrap_repo_ok found_submission in
+      assert_true
+        (Option.map
+           (fun (user : Toolkit.Domain.user) -> user.id)
+           deleted_user
+        = Some author.id)
+        "Caqti repo should return the deleted author";
+      assert_true
+        (found_task = None)
+        "Deleting the task author should cascade-delete owned tasks";
+      assert_true
+        (found_submission = None)
+        "Deleting the task author should cascade-delete submissions under owned tasks";
+      Lwt.return_unit)
+
 let tests =
   [
     ("register_and_me", test_register_and_me);
@@ -916,6 +1168,14 @@ let tests =
     ("admin_cli_promotes_user_to_admin", test_admin_cli_promotes_user_to_admin);
   ]
 
+let integration_tests =
+  [
+    ("caqti_repo_user_roundtrip", test_caqti_repo_user_roundtrip);
+    ( "caqti_repo_task_and_submission_roundtrip",
+      test_caqti_repo_task_and_submission_roundtrip );
+    ("caqti_repo_delete_user_cascades", test_caqti_repo_delete_user_cascades);
+  ]
+
 let run_test (name, fn) =
   try
     fn ();
@@ -931,7 +1191,12 @@ let run_test (name, fn) =
       false
 
 let () =
-  let results = List.map run_test tests in
+  if not (db_integration_enabled ()) then
+    Printf.printf "SKIP db integration tests (set RUN_DB_INTEGRATION_TESTS=1)\n%!";
+  let selected_tests =
+    if db_integration_enabled () then tests @ integration_tests else tests
+  in
+  let results = List.map run_test selected_tests in
   if List.for_all (fun passed -> passed) results then
     ()
   else

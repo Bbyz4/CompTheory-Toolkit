@@ -89,6 +89,7 @@ prepare_release() {
   cp "$root_dir/docker-compose.yml" "$next_release/docker-compose.yml"
   cp "$root_dir/docker-compose.deploy.yml" "$next_release/docker-compose.deploy.yml"
   cp "$root_dir/scripts/generate_deploy_cert.sh" "$next_release/scripts/generate_deploy_cert.sh"
+  cp "$root_dir/scripts/provision_db_access.sql" "$next_release/scripts/provision_db_access.sql"
   ln -sfn "$next_release" "$current_link"
 }
 
@@ -242,38 +243,8 @@ provision_db_access() {
     -v DBRO_PASSWORD="$dbro_password" \
     -v DBRW_USER="$dbrw_user" \
     -v DBRW_PASSWORD="$dbrw_password" \
-    -U "$postgres_user" -d "$postgres_db" <<'SQL'
-DO $do$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'DBRO_USER') THEN
-    EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', :'DBRO_USER', :'DBRO_PASSWORD');
-  ELSE
-    EXECUTE format('ALTER ROLE %I LOGIN PASSWORD %L', :'DBRO_USER', :'DBRO_PASSWORD');
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'DBRW_USER') THEN
-    EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', :'DBRW_USER', :'DBRW_PASSWORD');
-  ELSE
-    EXECUTE format('ALTER ROLE %I LOGIN PASSWORD %L', :'DBRW_USER', :'DBRW_PASSWORD');
-  END IF;
-END
-$do$;
-
-SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'APP_DB_NAME', :'DBRO_USER') \gexec
-SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'APP_DB_NAME', :'DBRW_USER') \gexec
-GRANT USAGE ON SCHEMA public TO :"DBRO_USER", :"DBRW_USER";
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO :"DBRO_USER";
-GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO :"DBRO_USER";
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO :"DBRW_USER";
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO :"DBRW_USER";
-ALTER DEFAULT PRIVILEGES FOR ROLE :"APP_DB_OWNER" IN SCHEMA public
-  GRANT SELECT ON TABLES TO :"DBRO_USER";
-ALTER DEFAULT PRIVILEGES FOR ROLE :"APP_DB_OWNER" IN SCHEMA public
-  GRANT SELECT ON SEQUENCES TO :"DBRO_USER";
-ALTER DEFAULT PRIVILEGES FOR ROLE :"APP_DB_OWNER" IN SCHEMA public
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"DBRW_USER";
-ALTER DEFAULT PRIVILEGES FOR ROLE :"APP_DB_OWNER" IN SCHEMA public
-  GRANT USAGE, SELECT ON SEQUENCES TO :"DBRW_USER";
-SQL
+    -U "$postgres_user" -d "$postgres_db" \
+    -f - < "$current_link/scripts/provision_db_access.sql"
 }
 
 install_shell_include() {
