@@ -32,7 +32,9 @@ trafficd start
 trafficcli status
 trafficcli add-users 100
 trafficcli start
-trafficcli set-rate 20.0
+trafficcli get-rates
+trafficcli set-rate submit 0.8
+trafficcli set-rate list_tasks 2.4
 trafficcli pause
 recognita_compose logs -f app web worker
 ```
@@ -91,7 +93,8 @@ Submission flow:
 - starts paused
 - keeps state in memory
 - creates and removes users through the API
-- supports live rate changes
+- cleans up created users on shutdown through the API
+- supports live per-operation rate changes
 
 Typical flow:
 
@@ -99,12 +102,17 @@ Typical flow:
 trafficd start
 trafficcli add-users 1000
 trafficcli start
-trafficcli set-rate 15.0
+trafficcli get-rates
+trafficcli set-rate list_tasks 2.0
+trafficcli set-rate view_task 1.2
+trafficcli set-rate login 0.4
+trafficcli set-rate submit 0.8
+trafficcli set-rate logout 0.2
 trafficcli pause
 trafficcli remove-users 200
 ```
 
-Test identities are generated deterministically with Faker.
+Test identities are generated deterministically with Faker. `trafficd` models arrivals as a Poisson process: the total arrival rate is the sum of per-operation lambdas, and each request type is chosen with probability proportional to its lambda.
 
 ## Deploy
 

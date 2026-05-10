@@ -1,20 +1,12 @@
 import argparse
 import json
-import re
 import sys
 
 try:
     from faker import Faker
-    from unidecode import unidecode
 except Exception as exc:
     print(json.dumps({"error": str(exc)}))
     sys.exit(2)
-
-
-def normalize(value: str) -> str:
-    value = unidecode(value).lower()
-    value = re.sub(r"[^a-z0-9]+", "-", value).strip("-")
-    return value or "user"
 
 
 def main() -> int:
@@ -28,16 +20,15 @@ def main() -> int:
     items = []
     for index in range(args.start_index, args.start_index + args.count):
         fake.seed_instance(args.seed + index * 104729)
+        profile = fake.simple_profile()
         first_name = fake.first_name()
         last_name = fake.last_name()
-        base = normalize(f"{first_name}-{last_name}")[:26]
-        username = f"{base}-{index:05d}"
         items.append(
             {
                 "first_name": first_name,
                 "last_name": last_name,
-                "username": username,
-                "email": f"{username}@{fake.free_email_domain()}",
+                "username": profile["username"],
+                "email": profile["mail"],
                 "password": f"Pass{index:05d}word!",
                 "client_id": f"loadtest-client-{index:05d}",
             }

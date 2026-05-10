@@ -192,6 +192,7 @@ let login_admin fixture =
 let create_task fixture access_token
     ?(title = "Mock task")
     ?(description = "Task description")
+    ?author_id
     ?(difficulty = 3)
     ?(status = "PUBLISHED")
     ?(visibility = "PUBLIC")
@@ -202,24 +203,29 @@ let create_task fixture access_token
           ("grader", `Assoc [ ("kind", `String "mock") ]);
         ])
     () =
+  let fields =
+    [
+      ("title", `String title);
+      ("description", `String description);
+      ("type", `String "MODEL_CONSTRUCTION");
+      ("difficulty", `Int difficulty);
+      ("config", config);
+      ("status", `String status);
+      ("visibility", `String visibility);
+    ]
+  in
+  let fields =
+    match author_id with
+    | Some value -> ("author_id", `Int value) :: fields
+    | None -> fields
+  in
   request fixture ~meth:`POST ~target:"/api/v1/tasks"
     ~headers:
       [
         ("Authorization", "Bearer " ^ access_token);
         ("Content-Type", "application/json");
       ]
-    ~body:
-      (Yojson.Basic.to_string
-         (`Assoc
-           [
-             ("title", `String title);
-             ("description", `String description);
-             ("type", `String "MODEL_CONSTRUCTION");
-             ("difficulty", `Int difficulty);
-             ("config", config);
-             ("status", `String status);
-             ("visibility", `String visibility);
-           ]))
+    ~body:(Yojson.Basic.to_string (`Assoc fields))
     ()
 
 let verification_token_from_mail mail =
@@ -323,6 +329,62 @@ let test_user_can_delete_own_account () =
   assert_status `Unauthorized me_response;
   let relogin = login fixture "bruno" "password123" in
   assert_status `Unauthorized relogin
+
+let test_delete_user_cascades_owned_tasks_and_submissions () =
+  let fixture = make_fixture () in
+  let admin_access = login_admin fixture in
+  let author_response =
+    register fixture "ola" "ola@example.com" "password123"
+  in
+  assert_status `Created author_response;
+  let author_id = user_id_of_response author_response in
+  let author_access = token_of_response author_response "access_token" in
+  let task_response =
+    create_task fixture admin_access ~author_id
+      ~title:"Owned by ola" ~description:"Owned task" ()
+  in
+  assert_status `Created task_response;
+  let task_id = task_id_of_response task_response in
+  let task_slug = task_slug_of_response task_response in
+  let solver_response =
+    register fixture "solver2" "solver2@example.com" "password123"
+  in
+  assert_status `Created solver_response;
+  let solver_access = token_of_response solver_response "access_token" in
+  let submission_response =
+    request fixture ~meth:`POST
+      ~target:(Printf.sprintf "/api/v1/tasks/%d/submissions" task_id)
+      ~headers:
+        [
+          ("Authorization", "Bearer " ^ solver_access);
+          ("Content-Type", "application/json");
+        ]
+      ~body:
+        (Yojson.Basic.to_string
+           (`Assoc [ ("data", `Assoc [ ("answer", `String "mock") ]) ]))
+      ()
+  in
+  assert_status `Created submission_response;
+  let submission_id = submission_id_of_response submission_response in
+  let delete_response =
+    request fixture ~meth:`DELETE ~target:"/api/v1/me"
+      ~headers:[ ("Authorization", "Bearer " ^ author_access) ]
+      ()
+  in
+  assert_status `OK delete_response;
+  let task_lookup =
+    request fixture ~meth:`GET
+      ~target:("/api/v1/tasks/slug/" ^ task_slug)
+      ()
+  in
+  assert_status `Not_Found task_lookup;
+  let stored_submission =
+    Lwt_main.run (fixture.repo.find_submission_by_id submission_id)
+    |> unwrap_repo_ok
+  in
+  assert_true
+    (stored_submission = None)
+    "Deleting a task author should cascade to submissions owned by that task"
 
 let test_refresh_rotates_tokens () =
   let fixture = make_fixture () in
@@ -824,6 +886,8 @@ let tests =
       test_register_sends_verification_email_and_verify_endpoint );
     ("login_and_logout", test_login_and_logout);
     ("delete_own_account", test_user_can_delete_own_account);
+    ( "delete_user_cascades_owned_tasks_and_submissions",
+      test_delete_user_cascades_owned_tasks_and_submissions );
     ("refresh_rotates_tokens", test_refresh_rotates_tokens);
     ("admin_lists_and_moderates_users", test_admin_lists_and_moderates_users);
     ("non_admin_cannot_moderate", test_non_admin_cannot_moderate);

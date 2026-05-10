@@ -453,7 +453,7 @@ module Q = struct
           short_description TEXT,
           description TEXT NOT NULL,
           type task_type NOT NULL,
-          author_id BIGINT NOT NULL REFERENCES users(id),
+          author_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
           difficulty SMALLINT NOT NULL CHECK (difficulty BETWEEN 0 AND 10),
           config JSONB NOT NULL,
           status task_status NOT NULL DEFAULT 'DRAFT',
@@ -464,6 +464,45 @@ module Q = struct
           CHECK (status <> 'PUBLISHED' OR published_at IS NOT NULL),
           CHECK (jsonb_typeof(config) = 'object')
         )
+      |}
+
+  let ensure_tasks_author_delete_cascade =
+    Caqti_type.(unit ->. unit)
+      {|
+        DO '
+        DECLARE
+          constraint_name text;
+          delete_mode "char";
+        BEGIN
+          SELECT c.confdeltype INTO delete_mode
+          FROM pg_constraint c
+          JOIN pg_class t ON t.oid = c.conrelid
+          JOIN pg_attribute a
+            ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
+          WHERE t.relname = ''tasks''
+            AND c.contype = ''f''
+            AND a.attname = ''author_id''
+          LIMIT 1;
+
+          IF delete_mode IS DISTINCT FROM ''c'' THEN
+            FOR constraint_name IN
+              SELECT c.conname
+              FROM pg_constraint c
+              JOIN pg_class t ON t.oid = c.conrelid
+              JOIN pg_attribute a
+                ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
+              WHERE t.relname = ''tasks''
+                AND c.contype = ''f''
+                AND a.attname = ''author_id''
+            LOOP
+              EXECUTE ''ALTER TABLE tasks DROP CONSTRAINT '' || quote_ident(constraint_name);
+            END LOOP;
+
+            EXECUTE
+              ''ALTER TABLE tasks ADD CONSTRAINT tasks_author_id_fkey FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE'';
+          END IF;
+        END
+        ';
       |}
 
   let create_pg_trgm_extension =
@@ -1252,6 +1291,7 @@ let make (db : Caqti_lwt.connection) =
           let** () = run_exec Q.migrate_email_verifications_created_at () in
           let** () = run_exec Q.set_email_verifications_timestamp_defaults () in
           let** () = run_exec Q.create_tasks_table () in
+          let** () = run_exec Q.ensure_tasks_author_delete_cascade () in
           let** () = run_exec Q.create_pg_trgm_extension () in
           let** () = run_exec Q.create_tasks_indexes () in
           let** () = run_exec Q.create_tasks_author_idx () in

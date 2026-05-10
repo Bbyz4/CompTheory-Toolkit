@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 
   type task_type NOT NULL,
 
-  author_id BIGINT NOT NULL REFERENCES users(id),
+  author_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
   difficulty SMALLINT NOT NULL CHECK (difficulty BETWEEN 0 AND 10),
 

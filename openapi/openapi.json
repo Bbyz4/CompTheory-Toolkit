@@ -225,9 +225,6 @@
           },
           "401": {
             "description": "Access token invalid"
-          },
-          "409": {
-            "description": "User still owns tasks"
           }
         }
       }

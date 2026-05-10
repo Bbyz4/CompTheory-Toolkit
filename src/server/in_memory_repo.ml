@@ -210,6 +210,34 @@ let make () =
     match user_by_id user_id with
     | None -> Lwt.return (Ok None)
     | Some user ->
+        let owned_task_ids =
+          Hashtbl.to_seq_values state.tasks
+          |> Seq.filter (fun (task : Domain.task) -> task.author_id = user_id)
+          |> Seq.map (fun (task : Domain.task) -> task.id)
+          |> List.of_seq
+        in
+        List.iter
+          (fun task_id ->
+            match task_by_id task_id with
+            | None -> ()
+            | Some task ->
+                Hashtbl.remove state.tasks task_id;
+                begin
+                  match task.slug with
+                  | Some slug -> Hashtbl.remove state.task_slugs slug
+                  | None -> ()
+                end)
+          owned_task_ids;
+        Hashtbl.filter_map_inplace
+          (fun _id (submission : Domain.submission) ->
+            if
+              submission.user_id = user_id
+              || List.mem submission.task_id owned_task_ids
+            then
+              None
+            else
+              Some submission)
+          state.submissions;
         Hashtbl.remove state.users user_id;
         Hashtbl.remove state.usernames user.username;
         Hashtbl.remove state.emails user.email;
@@ -239,10 +267,6 @@ let make () =
             | Some _ -> Some verification_id
             | None -> None)
           state.verification_tokens;
-        Hashtbl.filter_map_inplace
-          (fun _id (submission : Domain.submission) ->
-            if submission.user_id = user_id then None else Some submission)
-          state.submissions;
         Lwt.return (Ok (Some user))
   in
   let create_task ~title ~slug ~short_description ~description ~type_ ~author_id

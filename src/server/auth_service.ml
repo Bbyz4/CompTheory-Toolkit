@@ -255,26 +255,11 @@ let delete_current_user deps ~access_token =
   match context_result with
   | Error app_error -> error app_error
   | Ok context ->
-      let* listed = deps.repo.list_tasks () in
-      begin
-        match listed with
-        | Error repo_error -> error (map_repo_error repo_error)
-        | Ok tasks ->
-            if
-              List.exists
-                (fun (task : Domain.task) -> task.author_id = context.user.id)
-                tasks
-            then
-              error
-                (App_error.Conflict
-                   "Cannot delete a user that still owns tasks")
-            else
-              let* deleted = deps.repo.delete_user ~user_id:context.user.id in
-              match deleted with
-              | Error repo_error -> error (map_repo_error repo_error)
-              | Ok None -> error (App_error.Not_found "User not found")
-              | Ok (Some user) -> ok (Domain.public_user_of_user user)
-      end
+      let* deleted = deps.repo.delete_user ~user_id:context.user.id in
+      match deleted with
+      | Error repo_error -> error (map_repo_error repo_error)
+      | Ok None -> error (App_error.Not_found "User not found")
+      | Ok (Some user) -> ok (Domain.public_user_of_user user)
 
 let verify_email deps ~token =
   let now = deps.clock.now () in

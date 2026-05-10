@@ -159,8 +159,7 @@ let fallback =
         "security": [{ "bearerAuth": [] }],
         "responses": {
           "200": { "description": "Current user deleted" },
-          "401": { "description": "Access token invalid" },
-          "409": { "description": "User still owns tasks" }
+          "401": { "description": "Access token invalid" }
         }
       }
     },

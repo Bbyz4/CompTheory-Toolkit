@@ -6,8 +6,22 @@ let socket_arg =
 
 let rate_pos_arg =
   Cmdliner.Arg.(
-    required & pos 0 (some float) None
+    required & pos 1 (some float) None
     & info [] ~docv:"RATE" ~doc:"New average request rate in requests per second.")
+
+let operation_pos_arg =
+  Cmdliner.Arg.(
+    required & pos 0 (some string) None
+    & info [] ~docv:"OPERATION"
+      ~doc:
+        "Traffic operation: list_tasks, view_task, login, submit, logout.")
+
+let optional_operation_pos_arg =
+  Cmdliner.Arg.(
+    value & pos 0 (some string) None
+    & info [] ~docv:"OPERATION"
+      ~doc:
+        "Optional traffic operation: list_tasks, view_task, login, submit, logout.")
 
 let count_pos_arg =
   Cmdliner.Arg.(
@@ -41,16 +55,36 @@ let pause_cmd =
     "pause"
 
 let get_rate_cmd =
-  make_simple_cmd "get-rate" ~doc:"Read the current trafficd rate." "get-rate"
-
-let set_rate_cmd =
-  let doc = "Update the trafficd rate while it is running." in
+  let doc =
+    "Read the current total rate, or the rate of one specific traffic operation."
+  in
   let term =
     Cmdliner.Term.(
       const
-        (fun socket_path rate ->
-          print_response socket_path (Printf.sprintf "set-rate %.6f" rate))
-      $ socket_arg $ rate_pos_arg)
+        (fun socket_path operation ->
+          let command =
+            match operation with
+            | None -> "get-rate"
+            | Some value -> "get-rate " ^ value
+          in
+          print_response socket_path command)
+      $ socket_arg $ optional_operation_pos_arg)
+  in
+  Cmdliner.Cmd.v (Cmdliner.Cmd.info "get-rate" ~doc) term
+
+let get_rates_cmd =
+  make_simple_cmd "get-rates"
+    ~doc:"Read all per-operation traffic rates." "get-rates"
+
+let set_rate_cmd =
+  let doc = "Update the rate of one traffic operation while trafficd is running." in
+  let term =
+    Cmdliner.Term.(
+      const
+        (fun socket_path operation rate ->
+          print_response socket_path
+            (Printf.sprintf "set-rate %s %.6f" operation rate))
+      $ socket_arg $ operation_pos_arg $ rate_pos_arg)
   in
   Cmdliner.Cmd.v (Cmdliner.Cmd.info "set-rate" ~doc) term
 
@@ -77,7 +111,8 @@ let remove_users_cmd =
   Cmdliner.Cmd.v (Cmdliner.Cmd.info "remove-users" ~doc) term
 
 let stop_cmd =
-  make_simple_cmd "stop" ~doc:"Ask trafficd to stop." "stop"
+  make_simple_cmd "stop" ~doc:"Ask trafficd to stop and clean up synthetic data."
+    "stop"
 
 let cmd =
   let doc = "Control a running trafficd daemon." in
@@ -87,6 +122,7 @@ let cmd =
       start_cmd;
       pause_cmd;
       get_rate_cmd;
+      get_rates_cmd;
       set_rate_cmd;
       add_users_cmd;
       remove_users_cmd;
