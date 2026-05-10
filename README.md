@@ -28,6 +28,9 @@ Useful operational commands after `source`:
 
 ```bash
 admincli list-users
+admincli recent-submissions --limit 20
+recognita-dbro
+recognita-dbrw -c "select count(*) from submissions;"
 trafficd start
 trafficcli status
 trafficcli add-users 100
@@ -95,6 +98,7 @@ Submission flow:
 - creates and removes users through the API
 - cleans up created users on shutdown through the API
 - supports live per-operation rate changes
+- expresses all rates in requests per second
 
 Typical flow:
 
@@ -131,6 +135,8 @@ Server deploy then does only:
 On the server, after deploy, shell commands come from `.recognitarc`:
 - `recognita_compose`
 - `admincli`
+- `recognita-dbro`
+- `recognita-dbrw`
 - `trafficd`
 - `trafficcli`
 

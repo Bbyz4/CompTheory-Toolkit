@@ -2,6 +2,9 @@ let ( let* ) = Lwt.bind
 
 type command =
   | List_users
+  | Recent_submissions of {
+      limit : int;
+    }
   | Ban_user of {
       user_id : int;
       reason : string option;
@@ -12,6 +15,7 @@ type command =
 
 type outcome =
   | Users_listed of Domain.public_user list
+  | Recent_submissions_listed of Domain.submission list
   | User_banned of Domain.public_user
   | User_promoted_to_admin of Domain.public_user
 
@@ -40,6 +44,22 @@ let perform ~(repo : Repository.t) ~(clock : Clock.t) = function
       let* listed = repo.list_users () in
       match listed with
       | Ok users -> Lwt.return (Ok (Users_listed users))
+      | Error repo_error ->
+          Lwt.return (Error (Repository.error_message repo_error)))
+  | Recent_submissions { limit } -> (
+      let* listed = repo.list_submissions () in
+      match listed with
+      | Ok submissions ->
+          let rec take remaining acc items =
+            if remaining <= 0 then
+              List.rev acc
+            else
+              match items with
+              | [] -> List.rev acc
+              | head :: tail -> take (remaining - 1) (head :: acc) tail
+          in
+          Lwt.return
+            (Ok (Recent_submissions_listed (take (max 0 limit) [] submissions)))
       | Error repo_error ->
           Lwt.return (Error (Repository.error_message repo_error)))
   | Ban_user { user_id; reason } -> (
@@ -119,6 +139,24 @@ let user_cells (user : Domain.public_user) =
     user_reason user;
   ]
 
+let verdict_cell (submission : Domain.submission) =
+  Domain.submission_verdict_to_string submission.verdict
+
+let judged_at_cell (submission : Domain.submission) =
+  match submission.judged_at with
+  | Some value -> Util.iso8601_of_unix_time value
+  | None -> "-"
+
+let submission_cells (submission : Domain.submission) =
+  [
+    string_of_int submission.id;
+    string_of_int submission.task_id;
+    string_of_int submission.user_id;
+    verdict_cell submission;
+    Util.iso8601_of_unix_time submission.created_at;
+    judged_at_cell submission;
+  ]
+
 let render_user_table users =
   if users = [] then
     "No users found.\n"
@@ -168,6 +206,60 @@ let render_user_table users =
       [ header_line; separator; body; ""; Printf.sprintf "%d user(s)." (List.length users) ]
     ^ "\n"
 
+let render_submission_table submissions =
+  if submissions = [] then
+    "No submissions found.\n"
+  else
+    let headers = [ "ID"; "TASK"; "USER"; "VERDICT"; "CREATED_AT"; "JUDGED_AT" ] in
+    let rows =
+      List.map
+        (fun submission ->
+          match submission_cells submission with
+          | id :: task_id :: user_id :: verdict :: created_at :: judged_at :: [] ->
+              [
+                id;
+                task_id;
+                user_id;
+                verdict;
+                ellipsize ~max_width:20 created_at;
+                ellipsize ~max_width:20 judged_at;
+              ]
+          | _ -> failwith "unexpected submission row")
+        submissions
+    in
+    let widths =
+      List.mapi
+        (fun column header ->
+          List.fold_left
+            (fun current row ->
+              max current (String.length (List.nth row column)))
+            (String.length header) rows)
+        headers
+    in
+    let render_row row =
+      row
+      |> List.mapi (fun index cell ->
+             if index <= 2 then
+               pad_left (List.nth widths index) cell
+             else
+               pad_right (List.nth widths index) cell)
+      |> String.concat " | "
+    in
+    let separator =
+      widths |> List.map (fun width -> String.make width '-') |> String.concat "-+-"
+    in
+    let header_line = render_row headers in
+    let body = rows |> List.map render_row |> String.concat "\n" in
+    String.concat "\n"
+      [
+        header_line;
+        separator;
+        body;
+        "";
+        Printf.sprintf "%d submission(s)." (List.length submissions);
+      ]
+    ^ "\n"
+
 let render_ban_result (user : Domain.public_user) =
   let reason = user_reason user in
   Printf.sprintf "Banned user #%d (%s)\nemail: %s\nreason: %s\n" user.id
@@ -179,6 +271,7 @@ let render_promote_result (user : Domain.public_user) =
 
 let render = function
   | Users_listed users -> render_user_table users
+  | Recent_submissions_listed submissions -> render_submission_table submissions
   | User_banned user -> render_ban_result user
   | User_promoted_to_admin user -> render_promote_result user
 

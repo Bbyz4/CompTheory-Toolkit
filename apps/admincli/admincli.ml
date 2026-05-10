@@ -21,6 +21,23 @@ let list_users_term =
   in
   Cmdliner.Cmd.v (Cmdliner.Cmd.info "list-users" ~doc) term
 
+let submission_limit_arg =
+  let doc = "Maximum number of recent submissions to show. Defaults to 20." in
+  Cmdliner.Arg.(
+    value & opt int 20 & info [ "limit" ] ~docv:"COUNT" ~doc)
+
+let recent_submissions_term =
+  let doc = "List the most recent submissions from the database." in
+  let term =
+    let run db_url limit =
+      emit_result
+        (Toolkit.Admin_cli.run ?db_url
+           (Toolkit.Admin_cli.Recent_submissions { limit }))
+    in
+    Cmdliner.Term.(ret (const run $ db_url_arg $ submission_limit_arg))
+  in
+  Cmdliner.Cmd.v (Cmdliner.Cmd.info "recent-submissions" ~doc) term
+
 let user_id_arg =
   let doc = "User id to ban." in
   Cmdliner.Arg.(
@@ -60,6 +77,6 @@ let promote_admin_term =
 let cmd =
   let doc = "Administrative CLI for direct host-side moderation tasks." in
   Cmdliner.Cmd.group (Cmdliner.Cmd.info "admincli" ~doc)
-    [ list_users_term; ban_user_term; promote_admin_term ]
+    [ list_users_term; recent_submissions_term; ban_user_term; promote_admin_term ]
 
 let () = exit (Cmdliner.Cmd.eval cmd)

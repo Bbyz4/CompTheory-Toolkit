@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: ["server"]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -17,7 +20,7 @@ jobs:
       OPAMSOLVERTIMEOUT: 300
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up OCaml
         uses: ocaml/setup-ocaml@v3
@@ -55,10 +58,10 @@ jobs:
       fail2ban_image_ref: ${{ steps.image.outputs.fail2ban_image_ref }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Compute image reference
         id: image
@@ -80,14 +83,14 @@ jobs:
           printf 'fail2ban_image_ref=%s:%s\n' "$fail2ban_image_name" "$image_tag" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push app image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
@@ -103,7 +106,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and push nginx image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./infra/nginx/Dockerfile
@@ -118,7 +121,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and push fail2ban image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./infra/fail2ban/Dockerfile
@@ -140,10 +143,10 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Start SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.SERVER_PRIVATE_KEY }}
 
@@ -284,6 +287,26 @@ jobs:
             postgres_password="$(random_hex 24)"
           fi
 
+          dbro_user="${DBRO_USER:-$(get_existing DBRO_USER)}"
+          if [ -z "$dbro_user" ]; then
+            dbro_user="recognita_ro"
+          fi
+
+          dbro_password="${DBRO_PASSWORD:-$(get_existing DBRO_PASSWORD)}"
+          if [ -z "$dbro_password" ]; then
+            dbro_password="$(random_hex 24)"
+          fi
+
+          dbrw_user="${DBRW_USER:-$(get_existing DBRW_USER)}"
+          if [ -z "$dbrw_user" ]; then
+            dbrw_user="recognita_rw"
+          fi
+
+          dbrw_password="${DBRW_PASSWORD:-$(get_existing DBRW_PASSWORD)}"
+          if [ -z "$dbrw_password" ]; then
+            dbrw_password="$(random_hex 24)"
+          fi
+
           cookie_secret="${ACCESS_GATE_COOKIE_SECRET:-$(get_existing ACCESS_GATE_COOKIE_SECRET)}"
           if [ -z "$cookie_secret" ]; then
             cookie_secret="$(random_hex 32)"
@@ -320,6 +343,8 @@ jobs:
           fi
 
           database_url="postgresql://${postgres_user}:${postgres_password}@db:5432/${postgres_db}"
+          database_url_ro="postgresql://${dbro_user}:${dbro_password}@db:5432/${postgres_db}"
+          database_url_rw="postgresql://${dbrw_user}:${dbrw_password}@db:5432/${postgres_db}"
 
           set_kv APP_MODE deployment "$next_env"
           set_kv PROJECT_NAME "$PROJECT_NAME" "$next_env"
@@ -329,6 +354,10 @@ jobs:
           set_kv POSTGRES_DB "$postgres_db" "$next_env"
           set_kv POSTGRES_USER "$postgres_user" "$next_env"
           set_kv POSTGRES_PASSWORD "$postgres_password" "$next_env"
+          set_kv DBRO_USER "$dbro_user" "$next_env"
+          set_kv DBRO_PASSWORD "$dbro_password" "$next_env"
+          set_kv DBRW_USER "$dbrw_user" "$next_env"
+          set_kv DBRW_PASSWORD "$dbrw_password" "$next_env"
           set_kv APP_BASE_URL "$app_base_url" "$next_env"
           set_kv PUBLIC_WEB_BASE_URL "$public_web_base_url" "$next_env"
           set_kv NGINX_SERVER_NAME "$server_name" "$next_env"
@@ -337,6 +366,8 @@ jobs:
           set_kv ACCESS_GATE_CODE "$SECRET_CODE" "$next_env"
           set_kv ACCESS_GATE_COOKIE_SECRET "$cookie_secret" "$next_env"
           set_kv DATABASE_URL "$database_url" "$next_env"
+          set_kv DATABASE_URL_RO "$database_url_ro" "$next_env"
+          set_kv DATABASE_URL_RW "$database_url_rw" "$next_env"
           set_kv MAIL_FROM "$mail_from" "$next_env"
           set_kv TZ "$tz_value" "$next_env"
 
@@ -383,10 +414,58 @@ jobs:
             -f docker-compose.yml -f docker-compose.deploy.yml pull app web trafficd nginx fail2ban
           run_docker compose -p "$PROJECT_NAME" --env-file "$runtime_env" \
             -f docker-compose.yml -f docker-compose.deploy.yml up -d --no-build app web nginx fail2ban
+          run_docker compose -p "$PROJECT_NAME" --env-file "$runtime_env" \
+            -f docker-compose.yml -f docker-compose.deploy.yml exec -T db \
+            env PGPASSWORD="$postgres_password" \
+            psql -v ON_ERROR_STOP=1 \
+            -v APP_DB_NAME="$postgres_db" \
+            -v APP_DB_OWNER="$postgres_user" \
+            -v DBRO_USER="$dbro_user" \
+            -v DBRO_PASSWORD="$dbro_password" \
+            -v DBRW_USER="$dbrw_user" \
+            -v DBRW_PASSWORD="$dbrw_password" \
+            -U "$postgres_user" -d "$postgres_db" <<'SQL'
+          DO $do$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'DBRO_USER') THEN
+              EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', :'DBRO_USER', :'DBRO_PASSWORD');
+            ELSE
+              EXECUTE format('ALTER ROLE %I LOGIN PASSWORD %L', :'DBRO_USER', :'DBRO_PASSWORD');
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'DBRW_USER') THEN
+              EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', :'DBRW_USER', :'DBRW_PASSWORD');
+            ELSE
+              EXECUTE format('ALTER ROLE %I LOGIN PASSWORD %L', :'DBRW_USER', :'DBRW_PASSWORD');
+            END IF;
+          END
+          $do$;
+
+          SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'APP_DB_NAME', :'DBRO_USER') \gexec
+          SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'APP_DB_NAME', :'DBRW_USER') \gexec
+          GRANT USAGE ON SCHEMA public TO :"DBRO_USER", :"DBRW_USER";
+          GRANT SELECT ON ALL TABLES IN SCHEMA public TO :"DBRO_USER";
+          GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO :"DBRO_USER";
+          GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO :"DBRW_USER";
+          GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO :"DBRW_USER";
+          ALTER DEFAULT PRIVILEGES FOR ROLE :"APP_DB_OWNER" IN SCHEMA public
+            GRANT SELECT ON TABLES TO :"DBRO_USER";
+          ALTER DEFAULT PRIVILEGES FOR ROLE :"APP_DB_OWNER" IN SCHEMA public
+            GRANT SELECT ON SEQUENCES TO :"DBRO_USER";
+          ALTER DEFAULT PRIVILEGES FOR ROLE :"APP_DB_OWNER" IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"DBRW_USER";
+          ALTER DEFAULT PRIVILEGES FOR ROLE :"APP_DB_OWNER" IN SCHEMA public
+            GRANT USAGE, SELECT ON SEQUENCES TO :"DBRW_USER";
+          SQL
 
           ln -sfn "$RELEASE_DIR" "$DEPLOY_ROOT/current"
           cat > "$recognita_rc" <<EOFRC
           # Generated by Recognita deploy.
+          export RECOGNITA_POSTGRES_DB="$postgres_db"
+          export RECOGNITA_DBRO_USER="$dbro_user"
+          export RECOGNITA_DBRO_PASSWORD="$dbro_password"
+          export RECOGNITA_DBRW_USER="$dbrw_user"
+          export RECOGNITA_DBRW_PASSWORD="$dbrw_password"
+
           recognita_docker() {
             if docker info >/dev/null 2>&1; then
               docker "\$@"
@@ -408,12 +487,33 @@ jobs:
 
           alias rcompose='recognita_compose'
 
+          recognita_psql() {
+            role_user="\$1"
+            role_password="\$2"
+            shift 2
+            if [ \$# -eq 0 ] && [ -t 0 ] && [ -t 1 ]; then
+              recognita_compose exec db env PGPASSWORD="\$role_password" \
+                psql -U "\$role_user" -d "\$RECOGNITA_POSTGRES_DB"
+            else
+              recognita_compose exec -T db env PGPASSWORD="\$role_password" \
+                psql -U "\$role_user" -d "\$RECOGNITA_POSTGRES_DB" "\$@"
+            fi
+          }
+
           admincli() {
             if recognita_compose ps --status running --services 2>/dev/null | grep -qx 'app'; then
               recognita_compose exec -T app /app/admincli "\$@"
             else
               recognita_compose run --rm app /app/admincli "\$@"
             fi
+          }
+
+          recognita-dbro() {
+            recognita_psql "\$RECOGNITA_DBRO_USER" "\$RECOGNITA_DBRO_PASSWORD" "\$@"
+          }
+
+          recognita-dbrw() {
+            recognita_psql "\$RECOGNITA_DBRW_USER" "\$RECOGNITA_DBRW_PASSWORD" "\$@"
           }
 
           trafficcli() {

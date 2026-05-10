@@ -56,7 +56,7 @@ let pause_cmd =
 
 let get_rate_cmd =
   let doc =
-    "Read the current total rate, or the rate of one specific traffic operation."
+    "Read the current total rate, or the rate of one specific traffic operation, in requests per second."
   in
   let term =
     Cmdliner.Term.(
@@ -74,10 +74,12 @@ let get_rate_cmd =
 
 let get_rates_cmd =
   make_simple_cmd "get-rates"
-    ~doc:"Read all per-operation traffic rates." "get-rates"
+    ~doc:"Read all per-operation traffic rates in requests per second." "get-rates"
 
 let set_rate_cmd =
-  let doc = "Update the rate of one traffic operation while trafficd is running." in
+  let doc =
+    "Update the rate of one traffic operation while trafficd is running, in requests per second."
+  in
   let term =
     Cmdliner.Term.(
       const
