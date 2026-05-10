@@ -799,6 +799,7 @@ let test_admin_cli_lists_users_with_emails () =
            users)
         "Admin CLI list should include the created user with email"
   | Toolkit.Admin_cli.User_banned _
+  | Toolkit.Admin_cli.Recent_submissions_listed _
   | Toolkit.Admin_cli.User_promoted_to_admin _ ->
       fail "Admin CLI list returned the wrong outcome variant"
 
@@ -839,6 +840,7 @@ let test_admin_cli_ban_revokes_sessions () =
           (user.ban_reason = Some "manual moderation")
           "Admin CLI should persist the ban reason"
     | Toolkit.Admin_cli.Users_listed _
+    | Toolkit.Admin_cli.Recent_submissions_listed _
     | Toolkit.Admin_cli.User_promoted_to_admin _ ->
         fail "Admin CLI ban returned the wrong outcome variant"
   end;
@@ -876,7 +878,9 @@ let test_admin_cli_promotes_user_to_admin () =
         (user.role = Toolkit.Domain.Admin)
         "Admin CLI should set the admin role";
       assert_true user.verified "Promoted admin should be marked verified"
-  | Toolkit.Admin_cli.Users_listed _ | Toolkit.Admin_cli.User_banned _ ->
+  | Toolkit.Admin_cli.Users_listed _
+  | Toolkit.Admin_cli.Recent_submissions_listed _
+  | Toolkit.Admin_cli.User_banned _ ->
       fail "Admin CLI promote returned the wrong outcome variant"
 
 let tests =
