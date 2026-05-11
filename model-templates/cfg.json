@@ -1,4 +1,9 @@
 {
   "type": "CFG",
-  "model": {}
+  "model": {
+    "nonTerminals": [],
+    "terminals": [],
+    "transitions": [],
+    "startSymbol": "S"
+  }
 }
