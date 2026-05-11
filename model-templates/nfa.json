@@ -1,0 +1,10 @@
+{
+  "type": "NFA",
+  "model": {
+    "states": [],
+    "inputAlphabet": [],
+    "transitions": [],
+    "startStates": [],
+    "acceptStates": []
+  }
+}

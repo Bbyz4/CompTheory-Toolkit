@@ -17,6 +17,7 @@ module Model_construction = struct
       [
         ("version", `Int 1);
         ("grader", `Assoc [ ("kind", `String "mock") ]);
+        ("requiredModelType", `String "NFA");
       ]
 
   let validate_config json =
@@ -36,23 +37,50 @@ module Model_construction = struct
           Error (error "config.grader.kind" "must currently be equal to \"mock\"")
       | _ -> Error (error "config.grader.kind" "must be a string")
     in
-    match version, grader_kind with
-    | Error message, _ | _, Error message -> Error message
-    | Ok parsed_version, Ok parsed_kind ->
+    let required_model_type =
+      match json |> member "requiredModelType" with
+      | `Null -> Ok Domain.Nfa
+      | value -> Model_json.parse_model_type "config.requiredModelType" value
+    in
+    match version, grader_kind, required_model_type with
+    | Error message, _, _ | _, Error message, _ | _, _, Error message ->
+        Error message
+    | Ok parsed_version, Ok parsed_kind, Ok parsed_required_model_type ->
         Ok
           (`Assoc
              [
                ("version", `Int parsed_version);
                ("grader", `Assoc [ ("kind", `String parsed_kind) ]);
+               ( "requiredModelType",
+                 `String
+                   (Domain.model_type_to_string parsed_required_model_type) );
              ])
 
-  let validate_submission_data _config json =
-    let* _object = require_object "submission.data" json in
-    Ok json
+  let required_model_type config =
+    match config |> member "requiredModelType" with
+    | `String value -> Domain.model_type_of_string value
+    | _ -> None
+
+  let submission_template config =
+    match required_model_type config with
+    | Some model_type -> Model_json.template_json model_type
+    | None -> Model_json.template_json Domain.Nfa
+
+  let validate_submission_data config json =
+    let required_type =
+      match required_model_type config with
+      | Some model_type -> model_type
+      | None -> Domain.Nfa
+    in
+    Model_json.validate ~required_type json
 end
 
 let config_template_json = function
   | Domain.Model_construction -> Model_construction.config_template
+
+let submission_template_json ~task_type ~config =
+  match task_type with
+  | Domain.Model_construction -> Model_construction.submission_template config
 
 let validate_task_config ~task_type json =
   match task_type with

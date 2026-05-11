@@ -144,6 +144,45 @@ let submission_id_of_response response =
   let json = response_json response in
   json |> member "submission" |> member "id" |> to_int
 
+let model_construction_config ?(required_model_type = "NFA") () =
+  `Assoc
+    [
+      ("version", `Int 1);
+      ("grader", `Assoc [ ("kind", `String "mock") ]);
+      ("requiredModelType", `String required_model_type);
+    ]
+
+let valid_nfa_submission_data
+    ?(states = [ "q0"; "q1" ])
+    ?(input_alphabet = [ "a" ])
+    ?(transitions =
+      [
+        `Assoc
+          [
+            ("from", `String "q0");
+            ("to", `String "q1");
+            ("symbol", `String "a");
+          ];
+      ])
+    ?(start_states = [ "q0" ])
+    ?(accept_states = [ "q1" ]) () =
+  `Assoc
+    [
+      ("type", `String "NFA");
+      ( "model",
+        `Assoc
+          [
+            ("states", `List (List.map (fun value -> `String value) states));
+            ( "inputAlphabet",
+              `List (List.map (fun value -> `String value) input_alphabet) );
+            ("transitions", `List transitions);
+            ( "startStates",
+              `List (List.map (fun value -> `String value) start_states) );
+            ( "acceptStates",
+              `List (List.map (fun value -> `String value) accept_states) );
+          ] );
+    ]
+
 let unwrap_result map_error = function
   | Ok value -> value
   | Error error -> fail (map_error error)
@@ -269,11 +308,7 @@ let create_task fixture access_token
     ?(status = "PUBLISHED")
     ?(visibility = "PUBLIC")
     ?(config =
-      `Assoc
-        [
-          ("version", `Int 1);
-          ("grader", `Assoc [ ("kind", `String "mock") ]);
-        ])
+      model_construction_config ())
     () =
   let fields =
     [
@@ -433,7 +468,7 @@ let test_delete_user_cascades_owned_tasks_and_submissions () =
         ]
       ~body:
         (Yojson.Basic.to_string
-           (`Assoc [ ("data", `Assoc [ ("answer", `String "mock") ]) ]))
+           (`Assoc [ ("data", valid_nfa_submission_data ()) ]))
       ()
   in
   assert_status `Created submission_response;
@@ -612,7 +647,7 @@ let test_submission_is_created_pending_and_worker_judges_it () =
         ]
       ~body:
         (Yojson.Basic.to_string
-           (`Assoc [ ("data", `Assoc [ ("answer", `String "mock") ]) ]))
+           (`Assoc [ ("data", valid_nfa_submission_data ()) ]))
       ()
   in
   assert_status `Created created_submission;
@@ -628,6 +663,7 @@ let test_submission_is_created_pending_and_worker_judges_it () =
       repo = fixture.repo;
       queue = fixture.submission_queue;
       clock = fixture.clock;
+      judging_delay_seconds = (fun () -> 0.);
     }
   in
   let processed =
@@ -649,6 +685,62 @@ let test_submission_is_created_pending_and_worker_judges_it () =
         "Worker should persist mock run_data"
   | None -> fail "Stored submission should still be queryable"
 
+let test_submission_rejects_invalid_nfa_payload () =
+  let fixture = make_fixture () in
+  let admin_access = login_admin fixture in
+  let created_task = create_task fixture admin_access () in
+  assert_status `Created created_task;
+  let task_id = task_id_of_response created_task in
+  let registered =
+    register fixture "solver_bad" "solver_bad@example.com" "password123"
+  in
+  assert_status `Created registered;
+  let solver_access = token_of_response registered "access_token" in
+  let invalid_duplicate_transition =
+    `Assoc
+      [
+        ("type", `String "NFA");
+        ( "model",
+          `Assoc
+            [
+              ("states", `List [ `String "q0"; `String "q1" ]);
+              ("inputAlphabet", `List [ `String "a" ]);
+              ( "transitions",
+                `List
+                  [
+                    `Assoc
+                      [
+                        ("from", `String "q0");
+                        ("to", `String "q1");
+                        ("symbol", `String "a");
+                      ];
+                    `Assoc
+                      [
+                        ("from", `String "q0");
+                        ("to", `String "q1");
+                        ("symbol", `String "a");
+                      ];
+                  ] );
+              ("startStates", `List [ `String "q0" ]);
+              ("acceptStates", `List [ `String "q1" ]);
+            ] );
+      ]
+  in
+  let response =
+    request fixture ~meth:`POST
+      ~target:(Printf.sprintf "/api/v1/tasks/%d/submissions" task_id)
+      ~headers:
+        [
+          ("Authorization", "Bearer " ^ solver_access);
+          ("Content-Type", "application/json");
+        ]
+      ~body:
+        (Yojson.Basic.to_string
+           (`Assoc [ ("data", invalid_duplicate_transition) ]))
+      ()
+  in
+  assert_status `Bad_Request response
+
 let test_task_config_template_endpoint () =
   let fixture = make_fixture () in
   let response =
@@ -663,6 +755,14 @@ let test_task_config_template_endpoint () =
    |> to_string
     = "mock")
     "Task config template endpoint should return the mock grader template"
+  ;
+  assert_true
+    (json |> member "config_template" |> member "requiredModelType" |> to_string
+    = "NFA")
+    "Task config template endpoint should expose the required model type";
+  assert_true
+    (json |> member "submission_template" |> member "type" |> to_string = "NFA")
+    "Task config template endpoint should expose the default submission template"
 
 let test_task_without_slug_gets_generated_slug_and_can_be_loaded_by_slug () =
   let fixture = make_fixture () in
@@ -698,7 +798,7 @@ let test_submissions_scope_mine_vs_all () =
   assert_status `Created bob;
   let alice_access = token_of_response alice "access_token" in
   let bob_access = token_of_response bob "access_token" in
-  let post_submission access_token answer =
+  let post_submission access_token _answer =
     request fixture ~meth:`POST
       ~target:(Printf.sprintf "/api/v1/tasks/%d/submissions" task_id)
       ~headers:
@@ -708,7 +808,7 @@ let test_submissions_scope_mine_vs_all () =
         ]
       ~body:
         (Yojson.Basic.to_string
-           (`Assoc [ ("data", `Assoc [ ("answer", `String answer) ]) ]))
+           (`Assoc [ ("data", valid_nfa_submission_data ()) ]))
       ()
   in
   assert_status `Created (post_submission alice_access "a");
@@ -1015,11 +1115,7 @@ let test_caqti_repo_task_and_submission_roundtrip () =
       in
       let submitter = unwrap_repo_ok submitter in
       let config =
-        `Assoc
-          [
-            ("version", `Int 1);
-            ("grader", `Assoc [ ("kind", `String "mock") ]);
-          ]
+        model_construction_config ()
       in
       let* task =
         repo.create_task ~title:"Database task" ~slug:(Some "database-task")
@@ -1037,7 +1133,7 @@ let test_caqti_repo_task_and_submission_roundtrip () =
       let listed_tasks = unwrap_repo_ok listed_tasks in
       let* submission =
         repo.create_submission ~task_id:task.id ~user_id:submitter.id
-          ~data:(`Assoc [ ("answer", `String "candidate") ])
+          ~data:(valid_nfa_submission_data ())
           ~created_at:(now +. 2.)
       in
       let submission = unwrap_repo_ok submission in
@@ -1102,19 +1198,14 @@ let test_caqti_repo_delete_user_cascades () =
           ~short_description:None ~description:"Cascade task body"
           ~type_:Toolkit.Domain.Model_construction ~author_id:author.id
           ~difficulty:2
-          ~config:
-            (`Assoc
-              [
-                ("version", `Int 1);
-                ("grader", `Assoc [ ("kind", `String "mock") ]);
-              ])
+          ~config:(model_construction_config ())
           ~status:Toolkit.Domain.Published ~visibility:Toolkit.Domain.Public
           ~published_at:(Some now) ~created_at:now ~updated_at:now
       in
       let task = unwrap_repo_ok task in
       let* submission =
         repo.create_submission ~task_id:task.id ~user_id:submitter.id
-          ~data:(`Assoc []) ~created_at:(now +. 2.)
+          ~data:(valid_nfa_submission_data ()) ~created_at:(now +. 2.)
       in
       let submission = unwrap_repo_ok submission in
       let* deleted_user = repo.delete_user ~user_id:author.id in
@@ -1242,6 +1333,8 @@ let tests =
       test_admin_creates_task_and_public_list_exposes_it );
     ( "submission_is_created_pending_and_worker_judges_it",
       test_submission_is_created_pending_and_worker_judges_it );
+    ( "submission_rejects_invalid_nfa_payload",
+      test_submission_rejects_invalid_nfa_payload );
     ("task_config_template_endpoint", test_task_config_template_endpoint);
     ( "task_without_slug_gets_generated_slug_and_can_be_loaded_by_slug",
       test_task_without_slug_gets_generated_slug_and_can_be_loaded_by_slug );

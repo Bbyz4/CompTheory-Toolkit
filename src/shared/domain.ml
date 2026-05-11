@@ -5,6 +5,13 @@ type role =
 type task_type =
   | Model_construction
 
+type model_type =
+  | Nfa
+  | Cfg
+  | Pda
+  | Lba
+  | Tm
+
 type task_status =
   | Draft
   | Published
@@ -116,6 +123,21 @@ let task_type_to_string = function
 
 let task_type_of_string = function
   | "MODEL_CONSTRUCTION" | "model_construction" -> Some Model_construction
+  | _ -> None
+
+let model_type_to_string = function
+  | Nfa -> "NFA"
+  | Cfg -> "CFG"
+  | Pda -> "PDA"
+  | Lba -> "LBA"
+  | Tm -> "TM"
+
+let model_type_of_string = function
+  | "NFA" | "nfa" -> Some Nfa
+  | "CFG" | "cfg" -> Some Cfg
+  | "PDA" | "pda" -> Some Pda
+  | "LBA" | "lba" -> Some Lba
+  | "TM" | "tm" -> Some Tm
   | _ -> None
 
 let task_status_to_string = function

@@ -29,7 +29,16 @@ let () =
   Lwt_main.run
     (run_with_connection config.db_url (fun connection ->
          let repo = Toolkit.Caqti_repo.make connection in
-         let worker_deps : Toolkit.Submission_worker.deps = { repo; queue; clock } in
+         let worker_deps : Toolkit.Submission_worker.deps =
+           {
+             repo;
+             queue;
+             clock;
+             judging_delay_seconds =
+               (fun () ->
+                 Toolkit.Submission_worker.sample_poisson_seconds ~mean:6.0);
+           }
+         in
          Toolkit.Submission_worker.run_forever
            ~poll_interval_seconds:config.submission_worker_poll_interval_seconds
            worker_deps))

@@ -256,10 +256,16 @@ let perform_submit state =
   | Some user -> (
       match pick_random !(state.cached_tasks) with
       | None -> Lwt.return (Ok "submit_skipped_no_tasks")
-      | Some task ->
+      | Some task -> (
+          match Mock_model.generate_for_task ~task_type:task.type_ ~config:task.config with
+          | Error message ->
+              prerr_endline
+                (Printf.sprintf "trafficd submit generator failed: %s" message);
+              Lwt.return (Ok "submit_skipped_unsupported_task")
+          | Ok submission_data ->
           let submit_once session =
             Loadtest_api.submit state.client session ~task_id:task.id
-              ~data:(`Assoc [])
+              ~data:submission_data
           in
           let* session_result = ensure_live_session state user in
           begin
@@ -289,7 +295,7 @@ let perform_submit state =
                       Lwt.return (Ok "submit_stale_cache")
                   | Error _ as error -> Lwt.return error
                 end
-          end)
+          end))
 
 let pick_zipf_user state =
   match !(state.users) with
@@ -335,7 +341,7 @@ let add_tasks state requested_count =
                   Loadtest_api.create_task state.client admin_session
                     ~client_id:state.admin_client_id ~author_id:author.actor.user_id
                     ~title:spec.title ~description:spec.description
-                    ~difficulty:spec.difficulty ()
+                    ~difficulty:spec.difficulty ~required_model_type:"NFA" ()
                 in
                 match result with
                 | Ok task ->
@@ -678,7 +684,7 @@ let cmd =
       const
         (fun base_url seed rate report_every control_socket admin_username
              admin_password admin_client_id ->
-          Random.self_init ();
+          Random.init seed;
           Lwt_main.run
             (run ~base_url ~seed ~rate ~report_every ~control_socket
                ~admin_username ~admin_password ~admin_client_id))

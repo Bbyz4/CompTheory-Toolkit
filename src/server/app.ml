@@ -54,7 +54,24 @@ let user_json user = `Assoc [ ("user", Domain.public_user_to_yojson user) ]
 let tasks_json tasks =
   `Assoc [ ("tasks", `List (List.map Domain.task_to_yojson tasks)) ]
 
-let task_json task = `Assoc [ ("task", Domain.task_to_yojson task) ]
+let task_payload_json task =
+  let base_fields =
+    match Domain.task_to_yojson task with
+    | `Assoc fields -> fields
+    | _ -> []
+  in
+  let fields =
+    match Task_config.validate_task_config ~task_type:task.type_ task.config with
+    | Ok normalized_config ->
+        ( "submission_template",
+          Task_config.submission_template_json ~task_type:task.type_
+            ~config:normalized_config )
+        :: base_fields
+    | Error _ -> base_fields
+  in
+  `Assoc fields
+
+let task_json task = `Assoc [ ("task", task_payload_json task) ]
 
 let submission_json submission =
   `Assoc [ ("submission", Domain.submission_to_yojson submission) ]
@@ -67,10 +84,13 @@ let submissions_json submissions =
     ]
 
 let task_config_template_json task_type =
+  let config_template = Task_config.config_template_json task_type in
   `Assoc
     [
       ("task_type", `String (Domain.task_type_to_string task_type));
-      ("config_template", Task_config.config_template_json task_type);
+      ("config_template", config_template);
+      ( "submission_template",
+        Task_config.submission_template_json ~task_type ~config:config_template );
     ]
 
 let parse_body request =

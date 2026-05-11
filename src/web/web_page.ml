@@ -1226,7 +1226,7 @@ let template =
 
       async function fetchTaskBySlug(slug) {
         const cached = state.taskBySlug.get(slug);
-        if (cached) return cached;
+        if (cached && cached.submission_template) return cached;
         const response = await fetch("/proxy/tasks/slug/" + encodeURIComponent(slug));
         const payload = await parseJsonSafe(response);
         if (!response.ok) {
@@ -1278,11 +1278,13 @@ let template =
         if (!requireUser()) return;
 
         nodes.taskSubmit.disabled = true;
-        setMessage(nodes.taskMessage, "Submitting mock payload...");
+        setMessage(nodes.taskMessage, "Submitting...");
         try {
+          const submissionTemplate =
+            state.currentTask.submission_template || { type: "NFA", model: {} };
           const response = await api("/proxy/tasks/" + state.currentTask.id + "/submissions", {
             method: "POST",
-            body: JSON.stringify({ data: {} }),
+            body: JSON.stringify({ data: submissionTemplate }),
           });
           const payload = await parseJsonSafe(response);
           if (!response.ok) {

@@ -4,6 +4,7 @@ type deps = {
   repo : Repository.t;
   queue : Submission_queue.t;
   clock : Clock.t;
+  judging_delay_seconds : unit -> float;
 }
 
 let ok value = Lwt.return (Ok value)
@@ -22,15 +23,29 @@ let random_verdict () =
   | 2 -> Domain.Invalid_format
   | _ -> Domain.Internal_error
 
-let mock_run_data clock submission_id verdict =
+let mock_run_data clock submission_id verdict delay_seconds =
   `Assoc
     [
       ("worker", `String "mock-rabbitmq-http");
       ("submission_id", `Int submission_id);
       ("strategy", `String "random");
+      ("delay_seconds", `Float delay_seconds);
       ("verdict", `String (Domain.submission_verdict_to_string verdict));
       ("judged_at", `String (Util.iso8601_of_unix_time (clock.Clock.now ())));
     ]
+
+let sample_poisson_seconds ~mean =
+  if mean <= 0.0 then
+    0.
+  else
+    let limit = exp (-.mean) in
+    let rec loop k product =
+      if product <= limit then
+        float_of_int (k - 1)
+      else
+        loop (k + 1) (product *. Random.float 1.0)
+    in
+    loop 0 1.0
 
 let judge_submission deps submission_id =
   let* found = deps.repo.find_submission_by_id submission_id in
@@ -41,10 +56,12 @@ let judge_submission deps submission_id =
       if submission.verdict <> Domain.Pending then
         ok ()
       else
+        let delay_seconds = deps.judging_delay_seconds () in
+        let* () = Lwt_unix.sleep delay_seconds in
         let verdict = random_verdict () in
         let judged_at = deps.clock.now () in
         let run_data =
-          mock_run_data deps.clock submission.id verdict
+          mock_run_data deps.clock submission.id verdict delay_seconds
         in
         let* updated =
           deps.repo.update_submission_result ~submission_id:submission.id

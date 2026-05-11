@@ -24,6 +24,7 @@ type task = {
   title : string;
   difficulty : int;
   type_ : string;
+  config : Yojson.Basic.t;
 }
 
 type submission = {
@@ -196,13 +197,14 @@ let list_tasks client ?(client_id = "loadtest-public") () =
                    match item |> member "slug" with
                    | `String slug ->
                        Some
-                         {
-                           id = item |> member "id" |> to_int;
-                           slug;
-                           title = item |> member "title" |> to_string;
-                           difficulty = item |> member "difficulty" |> to_int;
-                           type_ = item |> member "type" |> to_string;
-                         }
+                           {
+                             id = item |> member "id" |> to_int;
+                             slug;
+                             title = item |> member "title" |> to_string;
+                             difficulty = item |> member "difficulty" |> to_int;
+                             type_ = item |> member "type" |> to_string;
+                             config = item |> member "config";
+                           }
                    | _ -> None)
           in
           ok tasks
@@ -227,18 +229,25 @@ let get_task_by_slug client ?(client_id = "loadtest-public") slug =
               title = task |> member "title" |> to_string;
               difficulty = task |> member "difficulty" |> to_int;
               type_ = task |> member "type" |> to_string;
+              config = task |> member "config";
             }
       | Error message, _ | _, Error message -> error message)
 
 let create_task client (session : session) ?client_id ?author_id ~title
-    ~description ~difficulty () =
+    ~description ~difficulty ?(required_model_type = "NFA") () =
   let base_fields =
     [
       ("title", `String title);
       ("description", `String description);
       ("type", `String "MODEL_CONSTRUCTION");
       ("difficulty", `Int difficulty);
-      ("config", `Assoc [ ("version", `Int 1); ("grader", `Assoc [ ("kind", `String "mock") ]) ]);
+      ( "config",
+        `Assoc
+          [
+            ("version", `Int 1);
+            ("grader", `Assoc [ ("kind", `String "mock") ]);
+            ("requiredModelType", `String required_model_type);
+          ] );
       ("status", `String "PUBLISHED");
       ("visibility", `String "PUBLIC");
     ]
@@ -269,6 +278,7 @@ let create_task client (session : session) ?client_id ?author_id ~title
               title = task |> member "title" |> to_string;
               difficulty = task |> member "difficulty" |> to_int;
               type_ = task |> member "type" |> to_string;
+              config = task |> member "config";
             }
       | Error message, _ | _, Error message -> error message)
 
