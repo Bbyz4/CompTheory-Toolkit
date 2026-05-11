@@ -1281,7 +1281,18 @@ let template =
         setMessage(nodes.taskMessage, "Submitting...");
         try {
           const submissionTemplate =
-            state.currentTask.submission_template || { type: "NFA", model: {} };
+            state.currentTask.submission_example ||
+            state.currentTask.submission_template ||
+            {
+              type: "NFA",
+              model: {
+                states: ["q0", "q1"],
+                inputAlphabet: ["a"],
+                transitions: [{ from: "q0", to: "q1", symbol: "a" }],
+                startStates: ["q0"],
+                acceptStates: ["q1"],
+              },
+            };
           const response = await api("/proxy/tasks/" + state.currentTask.id + "/submissions", {
             method: "POST",
             body: JSON.stringify({ data: submissionTemplate }),
@@ -1410,7 +1421,14 @@ let template =
           if (submission.judged_at) {
             nodes.submissionDetailMeta.appendChild(createTag("judged " + submission.judged_at));
           }
-          nodes.submissionDetailJson.textContent = JSON.stringify(submission.data, null, 2);
+          nodes.submissionDetailJson.textContent = JSON.stringify(
+            {
+              data: submission.data,
+              run_data: submission.run_data ?? null,
+            },
+            null,
+            2,
+          );
           setMessage(nodes.submissionDetailMessage, "");
         } catch (_error) {
           setMessage(nodes.submissionDetailMessage, "Network error while loading submission.", "error");

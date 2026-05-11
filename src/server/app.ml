@@ -66,6 +66,9 @@ let task_payload_json task =
         ( "submission_template",
           Task_config.submission_template_json ~task_type:task.type_
             ~config:normalized_config )
+        :: ( "submission_example",
+             Task_config.submission_example_json ~task_type:task.type_
+               ~config:normalized_config )
         :: base_fields
     | Error _ -> base_fields
   in
@@ -91,6 +94,8 @@ let task_config_template_json task_type =
       ("config_template", config_template);
       ( "submission_template",
         Task_config.submission_template_json ~task_type ~config:config_template );
+      ( "submission_example",
+        Task_config.submission_example_json ~task_type ~config:config_template );
     ]
 
 let parse_body request =

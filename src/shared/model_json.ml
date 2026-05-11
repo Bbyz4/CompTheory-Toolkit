@@ -68,6 +68,41 @@ let template_json = function
   | Domain.Lba -> model_object_placeholder Domain.Lba
   | Domain.Tm -> model_object_placeholder Domain.Tm
 
+let example_json = function
+  | Domain.Nfa ->
+      `Assoc
+        [
+          ("type", `String "NFA");
+          ( "model",
+            `Assoc
+              [
+                ("states", `List [ `String "q0"; `String "q1" ]);
+                ("inputAlphabet", `List [ `String "a" ]);
+                ( "transitions",
+                  `List
+                    [
+                      `Assoc
+                        [
+                          ("from", `String "q0");
+                          ("to", `String "q1");
+                          ("symbol", `String "a");
+                        ];
+                      `Assoc
+                        [
+                          ("from", `String "q1");
+                          ("to", `String "q1");
+                          ("symbol", `Null);
+                        ];
+                    ] );
+                ("startStates", `List [ `String "q0" ]);
+                ("acceptStates", `List [ `String "q1" ]);
+              ] );
+        ]
+  | Domain.Cfg -> model_object_placeholder Domain.Cfg
+  | Domain.Pda -> model_object_placeholder Domain.Pda
+  | Domain.Lba -> model_object_placeholder Domain.Lba
+  | Domain.Tm -> model_object_placeholder Domain.Tm
+
 let parse_model_type field json =
   match json with
   | `String value -> (

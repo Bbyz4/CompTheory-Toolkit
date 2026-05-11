@@ -66,6 +66,11 @@ module Model_construction = struct
     | Some model_type -> Model_json.template_json model_type
     | None -> Model_json.template_json Domain.Nfa
 
+  let submission_example config =
+    match required_model_type config with
+    | Some model_type -> Model_json.example_json model_type
+    | None -> Model_json.example_json Domain.Nfa
+
   let validate_submission_data config json =
     let required_type =
       match required_model_type config with
@@ -81,6 +86,10 @@ let config_template_json = function
 let submission_template_json ~task_type ~config =
   match task_type with
   | Domain.Model_construction -> Model_construction.submission_template config
+
+let submission_example_json ~task_type ~config =
+  match task_type with
+  | Domain.Model_construction -> Model_construction.submission_example config
 
 let validate_task_config ~task_type json =
   match task_type with
