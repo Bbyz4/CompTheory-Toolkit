@@ -1,0 +1,125 @@
+.app {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  background-color: var(--main);
+  position: fixed;
+}
+
+.sidebar {
+  width: 200px;
+  height: 100vh;
+  min-width: 200px;
+  background-color: var(--bg);
+  border-right: 1px solid var(--border);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  position: fixed;
+}
+
+.sidebar h1 {
+  color: var(--accent);
+  padding-bottom: 30px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--border);
+}
+
+.sidebar h2 {
+  color: var(--accent);
+  padding-bottom: 30px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--border);
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 0;
+  margin-top: 0px;
+}
+
+.sidebar li {
+  margin-bottom: 30px;
+  font-size: 24px;
+}
+
+.sidebar a {
+  text-decoration: none;
+  color: var(--text);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar a:hover {
+  color: var(--accent);
+}
+
+.content {
+  padding: 0 30px 30px 30px;
+  margin-left: 250px;
+  flex-grow: 1;
+  background-color: transparent;
+}
+
+.task-creator {
+  height: 44vh;
+  width: 40vw;
+  border-radius: 12px !important; 
+  background-color: var(--box) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: none !important;
+  margin-top: 2vh;
+  margin-bottom: 3vh;
+}
+
+.task-submissions {
+  height: 40vh;
+  width: 80vw;
+  border-radius: 12px !important; 
+  background-color: var(--box) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: none !important;
+}
+
+.task-title {
+  padding: 6px 0;
+  text-align: center;
+  margin-bottom: 16px;
+  width: 100%;
+  text-decoration: solid;
+}
+
+.task-submissions-title {
+  padding: 6px 0;
+  text-align: center;
+  margin-bottom: 16px;
+  width: 100%;
+  text-decoration: solid;
+}
+
+.custom-textfield .MuiInputLabel-root {
+  color: var(--text-secondary);
+}
+
+.custom-textfield .MuiInputLabel-root.Mui-focused {
+  color: var(--accent);
+}
+
+.custom-textfield .MuiOutlinedInput-root {
+  color: var(--text-secondary);
+}
+
+.custom-textfield .MuiOutlinedInput-root fieldset {
+  border-color: var(--accent-dark);
+}
+
+.custom-textfield .MuiOutlinedInput-root:hover fieldset {
+  border-color: var(--accent);
+}
+
+.custom-textfield .MuiOutlinedInput-root.Mui-focused fieldset {
+  border-color: var(--accent);
+}
