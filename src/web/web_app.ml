@@ -16,6 +16,12 @@ let constant_time_equal left right =
   done;
   !mismatch = 0
 
+let has_suffix ~suffix value =
+  let suffix_length = String.length suffix in
+  let value_length = String.length value in
+  value_length >= suffix_length
+  && String.sub value (value_length - suffix_length) suffix_length = suffix
+
 let expected_gate_cookie config =
   Digest.string (config.Web_config.access_code ^ "|" ^ config.access_cookie_secret)
   |> Digest.to_hex
@@ -53,12 +59,10 @@ let is_safe_return_target value =
   && path <> "/_recognita/access-gate"
   && not (Util.starts_with ~prefix:"/_recognita/" path)
   && not (Util.starts_with ~prefix:"/proxy/" path)
+  && not (Util.starts_with ~prefix:"/_admin_api/" path)
+  && not (Util.starts_with ~prefix:"/admin-assets/" path)
 
-let normalize_return_target value =
-  if is_safe_return_target value then
-    value
-  else
-    "/"
+let normalize_return_target value = if is_safe_return_target value then value else "/"
 
 let cookie_header config =
   let secure =
@@ -90,17 +94,13 @@ let gate_page ?(code = 200) ?(message = "") ?return_to config request =
     ~message ()
   |> html_response ~code
 
-let deny_proxy_access () =
+let deny_json_access message =
   Dream.respond ~code:403 ~headers:json_headers
     (Yojson.Basic.to_string
        (`Assoc
          [
            ( "error",
-             `Assoc
-               [
-                 ("status", `Int 403);
-                 ("message", `String "Access code required");
-               ] );
+             `Assoc [ ("status", `Int 403); ("message", `String message) ] );
          ]))
 
 let access_granted config request =
@@ -134,6 +134,24 @@ let respond_proxy response =
   Dream.respond ~code:response.status_code
     ~headers:[ ("content-type", content_type) ]
     response.body
+
+let proxy_public config ~meth path =
+  Lwt.catch
+    (fun () ->
+      let* response = proxy_request config ~meth path in
+      respond_proxy response)
+    (fun exn ->
+      Dream.respond ~code:502 ~headers:json_headers
+        (Yojson.Basic.to_string
+           (`Assoc
+             [
+               ( "error",
+                 `Assoc
+                   [
+                     ("status", `Int 502);
+                     ("message", `String ("Proxy error: " ^ Printexc.to_string exn));
+                   ] );
+             ])))
 
 let proxy_json config request ~meth path =
   let* body = Dream.body request in
@@ -191,6 +209,94 @@ let proxy_authed config request ~meth path =
                    ] );
              ])))
 
+let admin_credentials config =
+  match
+    ( config.Web_config.recognita_admin_username,
+      config.recognita_admin_password )
+  with
+  | Some username, Some password -> Ok (username, password)
+  | _ ->
+      Error
+        "Bootstrap admin credentials are not configured for the web service."
+
+let admin_access_token config =
+  match admin_credentials config with
+  | Error message -> Lwt.return (Error message)
+  | Ok (username, password) ->
+      let body =
+        Yojson.Basic.to_string
+          (`Assoc
+            [
+              ("username", `String username);
+              ("password", `String password);
+            ])
+      in
+      Lwt.catch
+        (fun () ->
+          let* response =
+            proxy_request config ~meth:"POST" "/api/v1/auth/login" ~body
+              ~headers:[ ("Content-Type", "application/json") ]
+          in
+          if response.status_code <> 200 then
+            Lwt.return
+              (Error
+                 (Printf.sprintf "Admin login failed with status %d."
+                    response.status_code))
+          else
+            try
+              let json = Yojson.Basic.from_string response.body in
+              match Yojson.Basic.Util.(json |> member "tokens" |> member "access_token") with
+              | `String token when String.trim token <> "" -> Lwt.return (Ok token)
+              | _ ->
+                  Lwt.return
+                    (Error
+                       "Admin login succeeded but the API did not return an access token.")
+            with Yojson.Json_error message ->
+              Lwt.return
+                (Error
+                   ("Admin login returned invalid JSON: " ^ message)))
+        (fun exn ->
+          Lwt.return
+            (Error ("Admin login proxy error: " ^ Printexc.to_string exn)))
+
+let proxy_admin config request ~meth path =
+  let content_type =
+    match Dream.header request "content-type" with
+    | Some value -> value
+    | None -> "application/json"
+  in
+  let* body = if meth = "GET" then Lwt.return "" else Dream.body request in
+  let* token_result = admin_access_token config in
+  match token_result with
+  | Error message -> Dream.respond ~code:503 ~headers:json_headers
+      (Yojson.Basic.to_string
+         (`Assoc
+           [
+             ( "error",
+               `Assoc [ ("status", `Int 503); ("message", `String message) ] );
+           ]))
+  | Ok access_token ->
+      Lwt.catch
+        (fun () ->
+          let* response =
+            proxy_request config ~access_token ~meth path
+              ~headers:[ ("Content-Type", content_type) ]
+              ?body:(if meth = "GET" then None else Some body)
+          in
+          respond_proxy response)
+        (fun exn ->
+          Dream.respond ~code:502 ~headers:json_headers
+            (Yojson.Basic.to_string
+               (`Assoc
+                 [
+                   ( "error",
+                     `Assoc
+                       [
+                         ("status", `Int 502);
+                         ("message", `String ("Proxy error: " ^ Printexc.to_string exn));
+                       ] );
+                 ])))
+
 let handle_access_submission config request =
   let* body = Dream.body request in
   let params = Uri.query_of_encoded body in
@@ -211,6 +317,73 @@ let handle_access_submission config request =
   else
     gate_page ~code:401 ~message:"Wrong codeword." config request
 
+let regular_file_exists path =
+  Sys.file_exists path
+  && (try not (Sys.is_directory path) with Sys_error _ -> false)
+
+let safe_segment segment =
+  segment <> ""
+  && segment <> "."
+  && segment <> ".."
+  && not (String.contains segment '/')
+  && not (String.contains segment '\000')
+
+let static_file_path config segments =
+  if List.for_all safe_segment segments then
+    Some (List.fold_left Filename.concat config.Web_config.admin_panel_dist_dir segments)
+  else
+    None
+
+let content_type path =
+  if has_suffix ~suffix:".html" path then
+    "text/html; charset=utf-8"
+  else if has_suffix ~suffix:".css" path then
+    "text/css; charset=utf-8"
+  else if has_suffix ~suffix:".js" path then
+    "text/javascript; charset=utf-8"
+  else if has_suffix ~suffix:".svg" path then
+    "image/svg+xml"
+  else if has_suffix ~suffix:".json" path then
+    "application/json; charset=utf-8"
+  else if has_suffix ~suffix:".ico" path then
+    "image/x-icon"
+  else
+    "application/octet-stream"
+
+let serve_file ?cache_control path =
+  if regular_file_exists path then
+    Lwt.catch
+      (fun () ->
+        let headers =
+          ("content-type", content_type path)
+          ::
+          (match cache_control with
+          | Some value -> [ ("cache-control", value) ]
+          | None -> [])
+        in
+        Dream.respond
+          ~headers
+          (Util.read_file path))
+      (fun _exn -> Dream.respond ~code:500 "Could not read file")
+  else
+    Dream.respond ~code:404 "Not found"
+
+let render_admin_panel config =
+  let index_path =
+    Filename.concat config.Web_config.admin_panel_dist_dir "index.html"
+  in
+  if regular_file_exists index_path then
+    serve_file index_path
+  else
+    html_response
+      "<!DOCTYPE html><html><head><title>Recognita Admin Panel</title></head><body><div id=\"root\">Admin panel build is missing.</div></body></html>"
+
+let serve_admin_asset config segments =
+  match static_file_path config segments with
+  | None -> Dream.respond ~code:404 "Not found"
+  | Some path ->
+      serve_file ~cache_control:"public, max-age=31536000, immutable" path
+
 let require_access config handler request =
   let path = request_path request in
   if
@@ -222,23 +395,17 @@ let require_access config handler request =
   then
     handler request
   else if Util.starts_with ~prefix:"/proxy/" path then
-    deny_proxy_access ()
+    deny_json_access "Access code required"
+  else if Util.starts_with ~prefix:"/_admin_api/" path then
+    deny_json_access "Access code required"
   else
     gate_page config request
 
 let make config =
-  let render_page _request =
-    Dream.html (Web_page.render ~site_name:config.Web_config.site_name)
-  in
+  let render_page _request = render_admin_panel config in
   let router =
     Dream.router
       [
-        Dream.get "/" render_page;
-        Dream.get "/verify" render_page;
-        Dream.get "/tasks/:slug" render_page;
-        Dream.get "/submissions" render_page;
-        Dream.get "/submissions/:id" render_page;
-        Dream.get "/admin/submissions" render_page;
         Dream.get "/health" (fun _request ->
             Dream.respond ~code:200 ~headers:json_headers
               (Yojson.Basic.to_string
@@ -255,6 +422,31 @@ let make config =
         Dream.post "/access" (handle_access_submission config);
         Dream.get "/_recognita/access-check" (access_check config);
         Dream.get "/_recognita/access-gate" (gate_page config);
+        Dream.get "/admin-assets/:file" (fun request ->
+            serve_admin_asset config [ Dream.param request "file" ]);
+        Dream.get "/admin-assets/:folder/:file" (fun request ->
+            serve_admin_asset config
+              [ Dream.param request "folder"; Dream.param request "file" ]);
+        Dream.get "/_admin_api/tasks" (fun _request ->
+            proxy_public config ~meth:"GET" "/api/v1/tasks");
+        Dream.get "/_admin_api/task-types/:type/config-template" (fun request ->
+            proxy_public config ~meth:"GET"
+              ("/api/v1/task-types/"
+              ^ Uri.pct_encode (Dream.param request "type")
+              ^ "/config-template"));
+        Dream.post "/_admin_api/tasks" (fun request ->
+            proxy_admin config request ~meth:"POST" "/api/v1/tasks");
+        Dream.get "/_admin_api/users" (fun request ->
+            proxy_admin config request ~meth:"GET" "/api/v1/users");
+        Dream.post "/_admin_api/users/:id/ban" (fun request ->
+            proxy_admin config request ~meth:"POST"
+              ("/api/v1/users/" ^ Dream.param request "id" ^ "/ban"));
+        Dream.post "/_admin_api/users/:id/unban" (fun request ->
+            proxy_admin config request ~meth:"POST"
+              ("/api/v1/users/" ^ Dream.param request "id" ^ "/unban"));
+        Dream.get "/_admin_api/submissions" (fun request ->
+            proxy_admin config request ~meth:"GET"
+              "/api/v1/submissions?scope=all");
         Dream.post "/proxy/auth/register" (fun request ->
             proxy_json config request ~meth:"POST" "/api/v1/auth/register");
         Dream.post "/proxy/auth/login" (fun request ->
@@ -270,14 +462,13 @@ let make config =
         Dream.get "/proxy/tasks" (fun request ->
             let query =
               match Uri.of_string (Dream.target request) |> Uri.verbatim_query with
-              | Some value -> "?" ^ value
               | None -> ""
+              | Some value -> "?" ^ value
             in
             proxy_json config request ~meth:"GET" ("/api/v1/tasks" ^ query));
-        Dream.get "/proxy/tasks/slug/:slug" (fun request ->
-            let slug = Dream.param request "slug" in
+        Dream.get "/proxy/tasks/:slug" (fun request ->
             proxy_json config request ~meth:"GET"
-              ("/api/v1/tasks/slug/" ^ Uri.pct_encode slug));
+              ("/api/v1/tasks/slug/" ^ Uri.pct_encode (Dream.param request "slug")));
         Dream.post "/proxy/tasks/:id/submissions" (fun request ->
             let task_id = Dream.param request "id" in
             proxy_authed config request ~meth:"POST"
@@ -285,24 +476,28 @@ let make config =
         Dream.get "/proxy/submissions" (fun request ->
             let query =
               match Uri.of_string (Dream.target request) |> Uri.verbatim_query with
-              | Some value -> "?" ^ value
               | None -> ""
+              | Some value -> "?" ^ value
             in
             proxy_authed config request ~meth:"GET" ("/api/v1/submissions" ^ query));
         Dream.get "/proxy/submissions/:id" (fun request ->
-            let submission_id = Dream.param request "id" in
             proxy_authed config request ~meth:"GET"
-              ("/api/v1/submissions/" ^ submission_id));
+              ("/api/v1/submissions/" ^ Dream.param request "id"));
         Dream.get "/proxy/users" (fun request ->
             proxy_authed config request ~meth:"GET" "/api/v1/users");
         Dream.post "/proxy/users/:id/ban" (fun request ->
-            let user_id = Dream.param request "id" in
             proxy_authed config request ~meth:"POST"
-              ("/api/v1/users/" ^ user_id ^ "/ban"));
+              ("/api/v1/users/" ^ Dream.param request "id" ^ "/ban"));
         Dream.post "/proxy/users/:id/unban" (fun request ->
-            let user_id = Dream.param request "id" in
             proxy_authed config request ~meth:"POST"
-              ("/api/v1/users/" ^ user_id ^ "/unban"));
+              ("/api/v1/users/" ^ Dream.param request "id" ^ "/unban"));
+        Dream.get "/" render_page;
+        Dream.get "/dashboard" render_page;
+        Dream.get "/tasks" render_page;
+        Dream.get "/submissions" render_page;
+        Dream.get "/students" render_page;
+        Dream.get "/settings" render_page;
+        Dream.get "/verify" render_page;
       ]
   in
   require_access config router

@@ -1,3 +1,17 @@
+FROM node:22-bookworm-slim AS node-toolchain
+
+FROM node-toolchain AS frontend-build
+
+WORKDIR /frontend
+
+COPY src/admin-panel/package.json src/admin-panel/package-lock.json ./
+
+RUN npm ci
+
+COPY src/admin-panel ./
+
+RUN npm run build
+
 FROM ocaml/opam:debian-12-ocaml-4.14 AS base
 
 WORKDIR /workspace
@@ -31,6 +45,8 @@ COPY --chown=opam:opam vendor ./vendor
 RUN opam install . --deps-only --with-test
 
 FROM base AS dev
+
+COPY --from=node-toolchain /usr/local/ /usr/local/
 
 CMD ["sleep", "infinity"]
 
@@ -73,6 +89,7 @@ COPY --from=build /workspace/scripts/mock_identity_faker.py /app/scripts/mock_id
 COPY --from=build /workspace/scripts/mock_task_faker.py /app/scripts/mock_task_faker.py
 COPY --from=build /workspace/openapi /app/openapi
 COPY --from=build /workspace/sql /app/sql
+COPY --from=frontend-build /frontend/dist /app/admin-panel
 
 EXPOSE 8080
 EXPOSE 8081

@@ -22,25 +22,34 @@ let test_web_access_gate_rejects_fake_cookie_and_accepts_real_one () =
       ~headers:[ ("Cookie", "recognita_gate=fakevalue") ]
       ()
   in
-  assert_status `Forbidden fake_cookie;
+  assert_true
+    (Dream.status fake_cookie = `Forbidden)
+    "Fake gate cookie should not unlock proxy access";
   let granted =
     request_handler app ~meth:`POST ~target:"/access"
       ~headers:[ ("Content-Type", "application/x-www-form-urlencoded") ]
       ~body:"code=pezarski&return_to=%2Fverify%3Ftoken%3Dabc"
       ()
   in
-  assert_status `See_Other granted;
+  assert_true
+    (Dream.status granted = `See_Other)
+    "Valid gate code should produce a redirect response";
+  assert_true
+    (Dream.header granted "location" = Some "/verify?token=abc")
+    "Access gate should preserve the requested verification return target";
   let gate_cookie = web_cookie_from_response granted in
-  let verify =
-    request_handler app ~meth:`GET ~target:"/verify?token=abc"
+  let dashboard =
+    request_handler app ~meth:`GET ~target:"/dashboard"
       ~headers:[ ("Cookie", gate_cookie) ]
       ()
   in
-  assert_status `OK verify;
-  let verify_body = response_body verify in
   assert_true
-    (contains_substring ~needle:"Verify your email" verify_body)
-    "Verified access should unlock the main application page"
+    (Dream.status dashboard = `OK)
+    "Gate cookie should unlock the admin panel shell";
+  let dashboard_body = response_body dashboard in
+  assert_true
+    (contains_substring ~needle:"Recognita Admin Panel" dashboard_body)
+    "Verified access should unlock the admin panel shell"
 
 let test_web_access_gate_supports_mailpit_return_and_internal_check () =
   let app = Toolkit.Web_app.make (web_config ()) in

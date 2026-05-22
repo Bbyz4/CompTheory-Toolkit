@@ -381,6 +381,9 @@ let web_config () : Toolkit.Web_config.t =
     site_name = "Recognita";
     access_code = "pezarski";
     access_cookie_secret = "test-gate-secret";
+    admin_panel_dist_dir = "src/admin-panel/dist";
+    recognita_admin_username = Some "recognita_admin";
+    recognita_admin_password = Some "change-me";
   }
 
 let web_cookie_from_response response =
