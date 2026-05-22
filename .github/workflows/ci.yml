@@ -1,0 +1,569 @@
+name: ci
+
+on:
+  push:
+    branches: ["server"]
+  pull_request:
+    branches: ["server"]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    env:
+      OPAMSOLVERTIMEOUT: 300
+      RUN_DB_INTEGRATION_TESTS: "1"
+      DATABASE_URL: postgresql://toolkit:toolkit@127.0.0.1:5432/toolkit
+      TEST_DATABASE_ADMIN_URL: postgresql://toolkit:toolkit@127.0.0.1:5432/postgres
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: toolkit
+          POSTGRES_USER: toolkit
+          POSTGRES_PASSWORD: toolkit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U toolkit -d toolkit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: 4.14.2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpq-dev libssl-dev libev-dev libgmp-dev pkg-config m4
+
+      - name: Install opam dependencies
+        run: opam install . --deps-only --with-test -y
+
+      - name: Build
+        run: opam exec -- dune build @all
+
+      - name: Test
+        run: opam exec -- dune runtest
+
+  build-image:
+    needs: build-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/server'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.image.outputs.image_tag }}
+      app_image_name: ${{ steps.image.outputs.app_image_name }}
+      nginx_image_name: ${{ steps.image.outputs.nginx_image_name }}
+      fail2ban_image_name: ${{ steps.image.outputs.fail2ban_image_name }}
+      app_image_ref: ${{ steps.image.outputs.app_image_ref }}
+      nginx_image_ref: ${{ steps.image.outputs.nginx_image_ref }}
+      fail2ban_image_ref: ${{ steps.image.outputs.fail2ban_image_ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Compute image reference
+        id: image
+        env:
+          OWNER: ${{ github.repository_owner }}
+          SHA: ${{ github.sha }}
+        run: |
+          owner_lc=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')
+          image_tag="sha-$SHA"
+          app_image_name="ghcr.io/$owner_lc/comp-theory-toolkit"
+          nginx_image_name="ghcr.io/$owner_lc/comp-theory-toolkit-nginx"
+          fail2ban_image_name="ghcr.io/$owner_lc/comp-theory-toolkit-fail2ban"
+          printf 'image_tag=%s\n' "$image_tag" >> "$GITHUB_OUTPUT"
+          printf 'app_image_name=%s\n' "$app_image_name" >> "$GITHUB_OUTPUT"
+          printf 'nginx_image_name=%s\n' "$nginx_image_name" >> "$GITHUB_OUTPUT"
+          printf 'fail2ban_image_name=%s\n' "$fail2ban_image_name" >> "$GITHUB_OUTPUT"
+          printf 'app_image_ref=%s:%s\n' "$app_image_name" "$image_tag" >> "$GITHUB_OUTPUT"
+          printf 'nginx_image_ref=%s:%s\n' "$nginx_image_name" "$image_tag" >> "$GITHUB_OUTPUT"
+          printf 'fail2ban_image_ref=%s:%s\n' "$fail2ban_image_name" "$image_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push app image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runtime
+          push: true
+          tags: |
+            ${{ steps.image.outputs.app_image_ref }}
+            ${{ steps.image.outputs.app_image_name }}:server
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push nginx image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./infra/nginx/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image.outputs.nginx_image_ref }}
+            ${{ steps.image.outputs.nginx_image_name }}:server
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push fail2ban image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./infra/fail2ban/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image.outputs.fail2ban_image_ref }}
+            ${{ steps.image.outputs.fail2ban_image_name }}:server
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/server'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.SERVER_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
+        env:
+          SERVER_ADDRESS: ${{ secrets.SERVER_ADDRESS }}
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$SERVER_ADDRESS" >> ~/.ssh/known_hosts
+
+      - name: Deploy on server
+        env:
+          SERVER_ADDRESS: ${{ secrets.SERVER_ADDRESS }}
+          SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
+          SECRET_CODE: ${{ secrets.SECRET_CODE }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          DBRO_PASSWORD: ${{ secrets.DBRO_PASSWORD }}
+          DBRW_PASSWORD: ${{ secrets.DBRW_PASSWORD }}
+          RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD }}
+          ACCESS_GATE_COOKIE_SECRET: ${{ secrets.ACCESS_GATE_COOKIE_SECRET }}
+          RECOGNITA_ADMIN_USERNAME: ${{ secrets.RECOGNITA_ADMIN_USERNAME }}
+          RECOGNITA_ADMIN_PASSWORD: ${{ secrets.RECOGNITA_ADMIN_PASSWORD }}
+          SERVER_DEPLOY_DIR: ${{ vars.SERVER_DEPLOY_DIR }}
+          SERVER_PROJECT_NAME: ${{ vars.SERVER_PROJECT_NAME }}
+          NGINX_SERVER_NAME: ${{ vars.NGINX_SERVER_NAME }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          PUBLIC_WEB_BASE_URL: ${{ vars.PUBLIC_WEB_BASE_URL }}
+          MAIL_FROM: ${{ vars.MAIL_FROM }}
+          TZ: ${{ vars.TZ }}
+          WEB_PUBLIC_PORT: ${{ vars.WEB_PUBLIC_PORT }}
+          WEB_TLS_PUBLIC_PORT: ${{ vars.WEB_TLS_PUBLIC_PORT }}
+          NGINX_ENABLE_TLS: ${{ vars.NGINX_ENABLE_TLS }}
+          POSTGRES_DB: ${{ vars.POSTGRES_DB }}
+          POSTGRES_USER: ${{ vars.POSTGRES_USER }}
+          RABBITMQ_USER: ${{ vars.RABBITMQ_USER }}
+          APP_IMAGE: ${{ needs.build-image.outputs.app_image_ref }}
+          NGINX_IMAGE: ${{ needs.build-image.outputs.nginx_image_ref }}
+          FAIL2BAN_IMAGE: ${{ needs.build-image.outputs.fail2ban_image_ref }}
+        run: |
+          quote() {
+            printf '%q' "$1"
+          }
+
+          deploy_root="${SERVER_DEPLOY_DIR:-}"
+          project_name="${SERVER_PROJECT_NAME:-comp-theory-toolkit}"
+          quoted_deploy_root="$(quote "$deploy_root")"
+          quoted_project_name="$(quote "$project_name")"
+
+          release_dir="$(
+            ssh "${SERVER_USERNAME}@${SERVER_ADDRESS}" \
+              "DEPLOY_ROOT=${quoted_deploy_root} bash -se" <<'EOF'
+          set -eu
+          if [ -z "${DEPLOY_ROOT:-}" ]; then
+            DEPLOY_ROOT="$HOME/comp-theory-toolkit-deploy"
+          fi
+          mkdir -p "$DEPLOY_ROOT/releases" "$DEPLOY_ROOT/state/nginx-certs"
+          release_dir="$(mktemp -d "$DEPLOY_ROOT/releases/release.XXXXXX")"
+          printf '%s\n' "$release_dir"
+          EOF
+          )"
+
+          tar -czf - \
+            docker-compose.yml \
+            docker-compose.deploy.yml \
+            .env.deploy.example \
+            scripts/generate_deploy_cert.sh \
+            scripts/provision_db_access.sql \
+          | ssh "${SERVER_USERNAME}@${SERVER_ADDRESS}" \
+            "set -eu; RELEASE_DIR=$(quote "$release_dir"); tar -xzf - -C \"\$RELEASE_DIR\""
+
+          ssh "${SERVER_USERNAME}@${SERVER_ADDRESS}" \
+            "DEPLOY_ROOT=${quoted_deploy_root} PROJECT_NAME=${quoted_project_name} RELEASE_DIR=$(quote "$release_dir") SECRET_CODE=$(quote "$SECRET_CODE") GHCR_USERNAME=$(quote "$GHCR_USERNAME") GHCR_TOKEN=$(quote "$GHCR_TOKEN") POSTGRES_PASSWORD=$(quote "$POSTGRES_PASSWORD") DBRO_PASSWORD=$(quote "$DBRO_PASSWORD") DBRW_PASSWORD=$(quote "$DBRW_PASSWORD") RABBITMQ_PASSWORD=$(quote "$RABBITMQ_PASSWORD") ACCESS_GATE_COOKIE_SECRET=$(quote "$ACCESS_GATE_COOKIE_SECRET") RECOGNITA_ADMIN_USERNAME=$(quote "$RECOGNITA_ADMIN_USERNAME") RECOGNITA_ADMIN_PASSWORD=$(quote "$RECOGNITA_ADMIN_PASSWORD") NGINX_SERVER_NAME=$(quote "$NGINX_SERVER_NAME") APP_BASE_URL=$(quote "$APP_BASE_URL") PUBLIC_WEB_BASE_URL=$(quote "$PUBLIC_WEB_BASE_URL") MAIL_FROM=$(quote "$MAIL_FROM") TZ=$(quote "$TZ") WEB_PUBLIC_PORT=$(quote "$WEB_PUBLIC_PORT") WEB_TLS_PUBLIC_PORT=$(quote "$WEB_TLS_PUBLIC_PORT") NGINX_ENABLE_TLS=$(quote "$NGINX_ENABLE_TLS") POSTGRES_DB=$(quote "$POSTGRES_DB") POSTGRES_USER=$(quote "$POSTGRES_USER") RABBITMQ_USER=$(quote "$RABBITMQ_USER") APP_IMAGE=$(quote "$APP_IMAGE") NGINX_IMAGE=$(quote "$NGINX_IMAGE") FAIL2BAN_IMAGE=$(quote "$FAIL2BAN_IMAGE") bash -se" <<'EOF'
+          set -eu
+
+          if [ -z "${DEPLOY_ROOT:-}" ]; then
+            DEPLOY_ROOT="$HOME/comp-theory-toolkit-deploy"
+          fi
+          if [ -z "${PROJECT_NAME:-}" ]; then
+            PROJECT_NAME="comp-theory-toolkit"
+          fi
+
+          STATE_DIR="$DEPLOY_ROOT/state"
+          runtime_env="$STATE_DIR/.env.deploy.runtime"
+          next_env="$runtime_env.next"
+          recognita_rc="$STATE_DIR/.recognitarc"
+          nginx_certs_dir="$STATE_DIR/nginx-certs"
+
+          cd "$RELEASE_DIR"
+          mkdir -p "$nginx_certs_dir"
+
+          template_env="$RELEASE_DIR/.env.deploy.example"
+
+          get_existing() {
+            key="$1"
+            if [ -f "$runtime_env" ]; then
+              awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$runtime_env"
+            fi
+          }
+
+          set_kv() {
+            key="$1"
+            value="$2"
+            file="$3"
+            escaped_value=$(printf '%s' "$value" | sed 's/[&|\\]/\\&/g')
+            if grep -q "^${key}=" "$file"; then
+              sed -i "s|^${key}=.*|${key}=${escaped_value}|" "$file"
+            else
+              printf '%s=%s\n' "$key" "$value" >> "$file"
+            fi
+          }
+
+          preserve_or_override() {
+            key="$1"
+            override="$2"
+            if [ -n "$override" ]; then
+              set_kv "$key" "$override" "$next_env"
+              return
+            fi
+            existing="$(get_existing "$key" || true)"
+            if [ -n "$existing" ]; then
+              set_kv "$key" "$existing" "$next_env"
+            fi
+          }
+
+          random_hex() {
+            openssl rand -hex "$1"
+          }
+
+          cp "$template_env" "$next_env"
+
+          postgres_db="${POSTGRES_DB:-$(get_existing POSTGRES_DB)}"
+          if [ -z "$postgres_db" ]; then
+            postgres_db="toolkit"
+          fi
+
+          postgres_user="${POSTGRES_USER:-$(get_existing POSTGRES_USER)}"
+          if [ -z "$postgres_user" ]; then
+            postgres_user="toolkit"
+          fi
+
+          postgres_password="${POSTGRES_PASSWORD:-$(get_existing POSTGRES_PASSWORD)}"
+          if [ -z "$postgres_password" ]; then
+            postgres_password="$(random_hex 24)"
+          fi
+
+          dbro_user="${DBRO_USER:-$(get_existing DBRO_USER)}"
+          if [ -z "$dbro_user" ]; then
+            dbro_user="recognita_ro"
+          fi
+
+          dbro_password="${DBRO_PASSWORD:-$(get_existing DBRO_PASSWORD)}"
+          if [ -z "$dbro_password" ]; then
+            dbro_password="$(random_hex 24)"
+          fi
+
+          dbrw_user="${DBRW_USER:-$(get_existing DBRW_USER)}"
+          if [ -z "$dbrw_user" ]; then
+            dbrw_user="recognita_rw"
+          fi
+
+          dbrw_password="${DBRW_PASSWORD:-$(get_existing DBRW_PASSWORD)}"
+          if [ -z "$dbrw_password" ]; then
+            dbrw_password="$(random_hex 24)"
+          fi
+
+          rabbitmq_user="${RABBITMQ_USER:-$(get_existing RABBITMQ_USER)}"
+          if [ -z "$rabbitmq_user" ]; then
+            rabbitmq_user="recognita"
+          fi
+
+          rabbitmq_password="${RABBITMQ_PASSWORD:-$(get_existing RABBITMQ_PASSWORD)}"
+          if [ -z "$rabbitmq_password" ]; then
+            rabbitmq_password="$(random_hex 24)"
+          fi
+
+          cookie_secret="${ACCESS_GATE_COOKIE_SECRET:-$(get_existing ACCESS_GATE_COOKIE_SECRET)}"
+          if [ -z "$cookie_secret" ]; then
+            cookie_secret="$(random_hex 32)"
+          fi
+
+          recognita_admin_username="${RECOGNITA_ADMIN_USERNAME:-$(get_existing RECOGNITA_ADMIN_USERNAME)}"
+          if [ -z "$recognita_admin_username" ]; then
+            recognita_admin_username="recognita_admin"
+          fi
+
+          recognita_admin_password="${RECOGNITA_ADMIN_PASSWORD:-$(get_existing RECOGNITA_ADMIN_PASSWORD)}"
+          if [ -z "$recognita_admin_password" ]; then
+            recognita_admin_password="$(random_hex 24)"
+          fi
+
+          server_name="${NGINX_SERVER_NAME:-$(get_existing NGINX_SERVER_NAME)}"
+          if [ -z "$server_name" ]; then
+            server_name="recognita.xyz"
+          fi
+
+          app_base_url="${APP_BASE_URL:-$(get_existing APP_BASE_URL)}"
+          if [ -z "$app_base_url" ]; then
+            app_base_url="https://$server_name"
+          fi
+
+          public_web_base_url="${PUBLIC_WEB_BASE_URL:-$(get_existing PUBLIC_WEB_BASE_URL)}"
+          if [ -z "$public_web_base_url" ]; then
+            public_web_base_url="$app_base_url"
+          fi
+
+          mail_from="${MAIL_FROM:-$(get_existing MAIL_FROM)}"
+          if [ -z "$mail_from" ]; then
+            mail_from="no-reply@$server_name"
+          fi
+
+          tz_value="${TZ:-$(get_existing TZ)}"
+          if [ -z "$tz_value" ]; then
+            tz_value="Europe/Rome"
+          fi
+
+          nginx_enable_tls="${NGINX_ENABLE_TLS:-$(get_existing NGINX_ENABLE_TLS)}"
+          if [ -z "$nginx_enable_tls" ]; then
+            nginx_enable_tls="auto"
+          fi
+
+          database_url="postgresql://${postgres_user}:${postgres_password}@db:5432/${postgres_db}"
+          database_url_ro="postgresql://${dbro_user}:${dbro_password}@db:5432/${postgres_db}"
+          database_url_rw="postgresql://${dbrw_user}:${dbrw_password}@db:5432/${postgres_db}"
+
+          set_kv APP_MODE deployment "$next_env"
+          set_kv PROJECT_NAME "$PROJECT_NAME" "$next_env"
+          set_kv APP_IMAGE "$APP_IMAGE" "$next_env"
+          set_kv NGINX_IMAGE "$NGINX_IMAGE" "$next_env"
+          set_kv FAIL2BAN_IMAGE "$FAIL2BAN_IMAGE" "$next_env"
+          set_kv POSTGRES_DB "$postgres_db" "$next_env"
+          set_kv POSTGRES_USER "$postgres_user" "$next_env"
+          set_kv POSTGRES_PASSWORD "$postgres_password" "$next_env"
+          set_kv DBRO_USER "$dbro_user" "$next_env"
+          set_kv DBRO_PASSWORD "$dbro_password" "$next_env"
+          set_kv DBRW_USER "$dbrw_user" "$next_env"
+          set_kv DBRW_PASSWORD "$dbrw_password" "$next_env"
+          set_kv RABBITMQ_USER "$rabbitmq_user" "$next_env"
+          set_kv RABBITMQ_PASSWORD "$rabbitmq_password" "$next_env"
+          set_kv APP_BASE_URL "$app_base_url" "$next_env"
+          set_kv PUBLIC_WEB_BASE_URL "$public_web_base_url" "$next_env"
+          set_kv NGINX_SERVER_NAME "$server_name" "$next_env"
+          set_kv NGINX_ENABLE_TLS "$nginx_enable_tls" "$next_env"
+          set_kv NGINX_CERTS_DIR "$nginx_certs_dir" "$next_env"
+          set_kv ACCESS_GATE_CODE "$SECRET_CODE" "$next_env"
+          set_kv ACCESS_GATE_COOKIE_SECRET "$cookie_secret" "$next_env"
+          set_kv RECOGNITA_ADMIN_USERNAME "$recognita_admin_username" "$next_env"
+          set_kv RECOGNITA_ADMIN_PASSWORD "$recognita_admin_password" "$next_env"
+          set_kv DATABASE_URL "$database_url" "$next_env"
+          set_kv DATABASE_URL_RO "$database_url_ro" "$next_env"
+          set_kv DATABASE_URL_RW "$database_url_rw" "$next_env"
+          set_kv MAIL_FROM "$mail_from" "$next_env"
+          set_kv TZ "$tz_value" "$next_env"
+
+          preserve_or_override WEB_PUBLIC_PORT "${WEB_PUBLIC_PORT:-}"
+          preserve_or_override WEB_TLS_PUBLIC_PORT "${WEB_TLS_PUBLIC_PORT:-}"
+
+          mv "$next_env" "$runtime_env"
+
+          if [ ! -f "$nginx_certs_dir/origin.crt" ] || [ ! -f "$nginx_certs_dir/origin.key" ]; then
+            if command -v openssl >/dev/null 2>&1; then
+              RECOGNITA_CERT_DIR="$nginx_certs_dir" NGINX_SERVER_NAME="$server_name" \
+                sh scripts/generate_deploy_cert.sh
+            fi
+          fi
+
+          if [ -n "${GHCR_USERNAME:-}" ] && [ -n "${GHCR_TOKEN:-}" ]; then
+            docker_login() {
+              run_docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+            }
+          fi
+
+          run_docker() {
+            docker "$@"
+          }
+
+          if ! docker info >/dev/null 2>&1; then
+            if command -v sudo >/dev/null 2>&1 && sudo -n docker info >/dev/null 2>&1; then
+              run_docker() {
+                sudo -n docker "$@"
+              }
+            else
+              printf '%s\n' \
+                "The deploy user cannot access the Docker daemon." \
+                "Add it to the docker group or allow passwordless sudo for docker." >&2
+              exit 1
+            fi
+          fi
+
+          if [ -n "${GHCR_USERNAME:-}" ] && [ -n "${GHCR_TOKEN:-}" ]; then
+            printf '%s' "$GHCR_TOKEN" | docker_login
+          fi
+
+          run_docker compose -p "$PROJECT_NAME" --env-file "$runtime_env" \
+            -f docker-compose.yml -f docker-compose.deploy.yml pull app worker web trafficd nginx fail2ban
+          run_docker compose -p "$PROJECT_NAME" --env-file "$runtime_env" \
+            -f docker-compose.yml -f docker-compose.deploy.yml up -d --no-build app worker web trafficd nginx fail2ban
+          run_docker compose -p "$PROJECT_NAME" --env-file "$runtime_env" \
+            -f docker-compose.yml -f docker-compose.deploy.yml exec -T db \
+            env PGPASSWORD="$postgres_password" \
+            psql -v ON_ERROR_STOP=1 \
+            -v APP_DB_NAME="$postgres_db" \
+            -v APP_DB_OWNER="$postgres_user" \
+            -v DBRO_USER="$dbro_user" \
+            -v DBRO_PASSWORD="$dbro_password" \
+            -v DBRW_USER="$dbrw_user" \
+            -v DBRW_PASSWORD="$dbrw_password" \
+            -U "$postgres_user" -d "$postgres_db" \
+            -f - < scripts/provision_db_access.sql
+
+          ln -sfn "$RELEASE_DIR" "$DEPLOY_ROOT/current"
+          cat > "$recognita_rc" <<EOFRC
+          # Generated by Recognita deploy.
+          export RECOGNITA_POSTGRES_DB="$postgres_db"
+          export RECOGNITA_DBRO_USER="$dbro_user"
+          export RECOGNITA_DBRO_PASSWORD="$dbro_password"
+          export RECOGNITA_DBRW_USER="$dbrw_user"
+          export RECOGNITA_DBRW_PASSWORD="$dbrw_password"
+
+          recognita_docker() {
+            if docker info >/dev/null 2>&1; then
+              docker "\$@"
+              return
+            fi
+            if command -v sudo >/dev/null 2>&1 && sudo -n docker info >/dev/null 2>&1; then
+              sudo -n docker "\$@"
+              return
+            fi
+            printf '%s\n' 'Docker daemon is not reachable for the current user.' >&2
+            return 1
+          }
+
+          recognita_compose() {
+            recognita_docker compose -p "$PROJECT_NAME" --env-file "$runtime_env" \
+              -f "$DEPLOY_ROOT/current/docker-compose.yml" \
+              -f "$DEPLOY_ROOT/current/docker-compose.deploy.yml" "\$@"
+          }
+
+          alias rcompose='recognita_compose'
+
+          recognita_psql() {
+            role_user="\$1"
+            role_password="\$2"
+            shift 2
+            if [ \$# -eq 0 ] && [ -t 0 ] && [ -t 1 ]; then
+              recognita_compose exec db env PGPASSWORD="\$role_password" \
+                psql -U "\$role_user" -d "\$RECOGNITA_POSTGRES_DB"
+            else
+              recognita_compose exec -T db env PGPASSWORD="\$role_password" \
+                psql -U "\$role_user" -d "\$RECOGNITA_POSTGRES_DB" "\$@"
+            fi
+          }
+
+          admincli() {
+            if recognita_compose ps --status running --services 2>/dev/null | grep -qx 'app'; then
+              recognita_compose exec -T app /app/admincli "\$@"
+            else
+              recognita_compose run --rm app /app/admincli "\$@"
+            fi
+          }
+
+          recognita-dbro() {
+            recognita_psql "\$RECOGNITA_DBRO_USER" "\$RECOGNITA_DBRO_PASSWORD" "\$@"
+          }
+
+          recognita-dbrw() {
+            recognita_psql "\$RECOGNITA_DBRW_USER" "\$RECOGNITA_DBRW_PASSWORD" "\$@"
+          }
+
+          trafficcli() {
+            socket_path=\${TRAFFICD_CONTROL_SOCKET:-/tmp/trafficd.sock}
+            if ! recognita_compose ps --status running --services 2>/dev/null | grep -qx 'trafficd'; then
+              printf '%s\n' 'trafficd is not running. Start it with trafficd start' >&2
+              return 1
+            fi
+            recognita_compose exec -T trafficd /app/trafficctl "\$@" --socket "\$socket_path"
+          }
+
+          trafficd() {
+            command=\${1:-status}
+            shift || true
+            case "\$command" in
+              start) recognita_compose up -d trafficd ;;
+              stop) recognita_compose stop trafficd ;;
+              restart) recognita_compose restart trafficd ;;
+              status) recognita_compose ps trafficd ;;
+              logs) recognita_compose logs -f --tail=100 trafficd ;;
+              *)
+                printf '%s\n' 'Usage: trafficd {start|stop|restart|status|logs}' >&2
+                return 64
+                ;;
+            esac
+          }
+          EOFRC
+          bashrc="$HOME/.bashrc"
+          include_line="[ -f \"$recognita_rc\" ] && . \"$recognita_rc\""
+          if [ ! -f "$bashrc" ] || ! grep -Fqx "$include_line" "$bashrc"; then
+            printf '\n%s\n' "$include_line" >> "$bashrc"
+          fi
+          find "$DEPLOY_ROOT/releases" -mindepth 1 -maxdepth 1 -type d \
+            ! -path "$RELEASE_DIR" | sort | head -n -3 | xargs -r rm -rf
+          EOF

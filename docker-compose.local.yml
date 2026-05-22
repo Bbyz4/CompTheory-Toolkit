@@ -1,0 +1,32 @@
+services:
+  db:
+    ports:
+      - "${POSTGRES_PUBLIC_PORT:-5432}:5432"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "${SMTP_PUBLIC_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PUBLIC_PORT:-8025}:8025"
+
+  app:
+    build:
+      context: .
+      target: runtime
+    image: ${APP_IMAGE:-comp-theory-toolkit-runtime:dev}
+    depends_on:
+      mailpit:
+        condition: service_started
+    environment:
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: 1025
+    ports:
+      - "${APP_PUBLIC_PORT:-8080}:${APP_PORT:-8080}"
+
+  web:
+    build:
+      context: .
+      target: runtime
+    image: ${APP_IMAGE:-comp-theory-toolkit-runtime:dev}
+    ports:
+      - "${WEB_PUBLIC_PORT:-8081}:${WEB_PORT:-8081}"

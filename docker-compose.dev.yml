@@ -1,0 +1,63 @@
+services:
+  db:
+    ports:
+      - "${POSTGRES_PUBLIC_PORT:-5432}:5432"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "${SMTP_PUBLIC_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PUBLIC_PORT:-8025}:8025"
+
+  dev:
+    image: comp-theory-toolkit-dev:dev
+    build:
+      context: .
+      target: dev
+    working_dir: /workspace
+    init: true
+    command: ["sleep", "infinity"]
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    environment:
+      APP_MODE: local
+      IN_DEV_CONTAINER: "1"
+      APP_HOST: ${APP_HOST:-0.0.0.0}
+      APP_PORT: ${APP_PORT:-8080}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+      PUBLIC_WEB_BASE_URL: ${PUBLIC_WEB_BASE_URL:-http://localhost:8081}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://toolkit:toolkit@db:5432/toolkit}
+      ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}
+      REFRESH_TOKEN_TTL_SECONDS: ${REFRESH_TOKEN_TTL_SECONDS:-604800}
+      VERIFICATION_TOKEN_TTL_SECONDS: ${VERIFICATION_TOKEN_TTL_SECONDS:-86400}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-120}
+      AUTH_RATE_LIMIT_WINDOW_SECONDS: ${AUTH_RATE_LIMIT_WINDOW_SECONDS:-60}
+      AUTH_RATE_LIMIT_MAX_REQUESTS: ${AUTH_RATE_LIMIT_MAX_REQUESTS:-20}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: 1025
+      MAIL_FROM: ${MAIL_FROM:-no-reply@recognita.xyz}
+      RECOGNITA_ADMIN_USERNAME: ${RECOGNITA_ADMIN_USERNAME:-}
+      RECOGNITA_ADMIN_PASSWORD: ${RECOGNITA_ADMIN_PASSWORD:-}
+      RABBITMQ_API_BASE_URL: ${RABBITMQ_API_BASE_URL:-http://rabbitmq:15672}
+      RABBITMQ_USER: ${RABBITMQ_USER:-recognita}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-recognita}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+      RABBITMQ_SUBMISSION_QUEUE: ${RABBITMQ_SUBMISSION_QUEUE:-submissions.pending}
+      SUBMISSION_WORKER_POLL_INTERVAL_SECONDS: ${SUBMISSION_WORKER_POLL_INTERVAL_SECONDS:-1}
+      WEB_HOST: ${WEB_HOST:-0.0.0.0}
+      WEB_PORT: ${WEB_PORT:-8081}
+      API_BASE_URL: ${API_BASE_URL:-http://app:8080}
+      SITE_NAME: ${SITE_NAME:-Recognita}
+    volumes:
+      - .:/workspace
+    stdin_open: true
+    tty: true
+
+  rabbitmq:
+    ports:
+      - "${RABBITMQ_PUBLIC_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PUBLIC_PORT:-15672}:15672"

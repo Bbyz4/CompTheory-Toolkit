@@ -1,0 +1,3 @@
+(executable
+ (name trafficctl)
+ (libraries toolkit unix lwt.unix cmdliner))

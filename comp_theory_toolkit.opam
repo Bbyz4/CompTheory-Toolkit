@@ -1,0 +1,23 @@
+opam-version: "2.0"
+synopsis: "Minimalist OCaml auth server with Dream, Caqti and PostgreSQL"
+maintainer: "CompTheory Toolkit"
+authors: "CompTheory Toolkit"
+license: "MIT"
+homepage: "https://github.com/Bbyz4/CompTheory-Toolkit"
+bug-reports: "https://github.com/Bbyz4/CompTheory-Toolkit/issues"
+depends: [
+  "ocaml" {>= "4.14.0"}
+  "dune" {>= "3.4"}
+  "dream" {= "1.0.0~alpha4"}
+  "lwt"
+  "yojson"
+  "cmdliner"
+  "uri"
+  "safepass"
+  "caqti" {= "1.9.0"}
+  "caqti-lwt" {= "1.9.0"}
+  "caqti-driver-postgresql" {= "1.9.0"}
+]
+build: [
+  ["dune" "build" "@all" "@runtest"]
+]

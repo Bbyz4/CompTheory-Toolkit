@@ -1,0 +1,15 @@
+[DEFAULT]
+ignoreip = 127.0.0.1/8 ::1
+bantime = 1h
+findtime = 10m
+maxretry = 8
+
+[recognita-auth]
+enabled = true
+filter = recognita-auth
+logpath = /var/log/nginx/access.log
+backend = auto
+port = http,https
+protocol = tcp
+chain = DOCKER-USER
+action = iptables-multiport[name=recognita-auth, chain=DOCKER-USER]

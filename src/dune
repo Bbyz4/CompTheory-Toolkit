@@ -1,0 +1,6 @@
+(include_subdirs unqualified)
+
+(library
+ (name toolkit)
+ (libraries unix str lwt.unix yojson dream uri caqti-lwt
+   caqti-driver-postgresql safepass))

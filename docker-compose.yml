@@ -1,0 +1,120 @@
+x-runtime-image: &runtime-image
+  image: ${APP_IMAGE:-comp-theory-toolkit-runtime:dev}
+
+x-app-env: &app-env
+  APP_MODE: ${APP_MODE:-local}
+  APP_HOST: ${APP_HOST:-0.0.0.0}
+  APP_PORT: ${APP_PORT:-8080}
+  APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+  PUBLIC_WEB_BASE_URL: ${PUBLIC_WEB_BASE_URL:-http://localhost:8081}
+  DATABASE_URL: ${DATABASE_URL:-postgresql://toolkit:toolkit@db:5432/toolkit}
+  ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}
+  REFRESH_TOKEN_TTL_SECONDS: ${REFRESH_TOKEN_TTL_SECONDS:-604800}
+  VERIFICATION_TOKEN_TTL_SECONDS: ${VERIFICATION_TOKEN_TTL_SECONDS:-86400}
+  RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+  RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-120}
+  AUTH_RATE_LIMIT_WINDOW_SECONDS: ${AUTH_RATE_LIMIT_WINDOW_SECONDS:-60}
+  AUTH_RATE_LIMIT_MAX_REQUESTS: ${AUTH_RATE_LIMIT_MAX_REQUESTS:-20}
+  SMTP_HOST: ${SMTP_HOST:-127.0.0.1}
+  SMTP_PORT: ${SMTP_PORT:-1025}
+  MAIL_FROM: ${MAIL_FROM:-no-reply@recognita.xyz}
+  RECOGNITA_ADMIN_USERNAME: ${RECOGNITA_ADMIN_USERNAME:-}
+  RECOGNITA_ADMIN_PASSWORD: ${RECOGNITA_ADMIN_PASSWORD:-}
+  RABBITMQ_API_BASE_URL: ${RABBITMQ_API_BASE_URL:-http://rabbitmq:15672}
+  RABBITMQ_USER: ${RABBITMQ_USER:-recognita}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-recognita}
+  RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+  RABBITMQ_SUBMISSION_QUEUE: ${RABBITMQ_SUBMISSION_QUEUE:-submissions.pending}
+  SUBMISSION_WORKER_POLL_INTERVAL_SECONDS: ${SUBMISSION_WORKER_POLL_INTERVAL_SECONDS:-1}
+
+x-web-env: &web-env
+  APP_MODE: ${APP_MODE:-local}
+  WEB_HOST: ${WEB_HOST:-0.0.0.0}
+  WEB_PORT: ${WEB_PORT:-8081}
+  API_BASE_URL: ${API_BASE_URL:-http://app:8080}
+  SITE_NAME: ${SITE_NAME:-Recognita}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-toolkit}
+      POSTGRES_USER: ${POSTGRES_USER:-toolkit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-toolkit}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-toolkit} -d ${POSTGRES_DB:-toolkit}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-recognita}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-recognita}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    <<: *runtime-image
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment: *app-env
+
+  worker:
+    <<: *runtime-image
+    command: ["/app/worker"]
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment: *app-env
+
+  web:
+    <<: *runtime-image
+    command: ["/app/webapp"]
+    depends_on:
+      app:
+        condition: service_started
+    environment: *web-env
+
+  trafficd:
+    <<: *runtime-image
+    environment:
+      RECOGNITA_ADMIN_USERNAME: ${RECOGNITA_ADMIN_USERNAME:-}
+      RECOGNITA_ADMIN_PASSWORD: ${RECOGNITA_ADMIN_PASSWORD:-}
+      TRAFFICD_ADMIN_CLIENT_ID: ${TRAFFICD_ADMIN_CLIENT_ID:-trafficd-admin}
+    command:
+      [
+        "/app/trafficd",
+        "--base-url",
+        "${TRAFFICD_API_BASE_URL:-http://app:8080}",
+        "--seed",
+        "${TRAFFICD_SEED:-20260508}",
+        "--control-socket",
+        "${TRAFFICD_CONTROL_SOCKET:-/tmp/trafficd.sock}",
+        "--rate",
+        "${TRAFFICD_RATE:-3.0}",
+        "--report-every",
+        "${TRAFFICD_REPORT_EVERY:-100}",
+      ]
+    depends_on:
+      app:
+        condition: service_started
+
+volumes:
+  pg_data:

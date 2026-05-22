@@ -25,3 +25,13 @@ dist-ssr
 *.codex
 TODO
 TODO-NOW
+
+# server
+_build/
+*.install
+*.merlin
+.DS_Store
+.env
+.local-deploy/
+infra/nginx/certs/*
+!infra/nginx/certs/.gitkeep

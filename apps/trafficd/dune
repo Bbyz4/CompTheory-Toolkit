@@ -1,0 +1,3 @@
+(executable
+ (name trafficd)
+ (libraries toolkit unix lwt.unix yojson cmdliner uri))
