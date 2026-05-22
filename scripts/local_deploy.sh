@@ -5,12 +5,16 @@ root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root_dir"
 
 state_root="$root_dir/.local-deploy"
+legacy_state_root="$root_dir/.local_deploy"
 state_dir="$state_root/state"
 releases_dir="$state_root/releases"
 current_link="$state_root/current"
 runtime_env="$state_dir/.env.deploy.runtime"
 recognita_rc="$state_dir/.recognitarc"
 local_override="$state_dir/docker-compose.local-deploy.yml"
+repo_certs_dir="$root_dir/infra/nginx/certs"
+build_dir="$root_dir/_build"
+trafficd_state_dir="$root_dir/var/trafficd"
 
 project_name=${LOCAL_DEPLOY_PROJECT_NAME:-comp-theory-toolkit-local-deploy}
 app_image=${LOCAL_DEPLOY_APP_IMAGE:-comp-theory-toolkit-runtime:local-deploy}
@@ -46,6 +50,12 @@ app_base_url=${LOCAL_DEPLOY_APP_BASE_URL:-http://localhost:$web_public_port}
 public_web_base_url=${LOCAL_DEPLOY_PUBLIC_WEB_BASE_URL:-$app_base_url}
 nginx_certs_dir="$state_dir/nginx-certs"
 
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/local_deploy.sh {prepare|build|rebuild|up|down|logs|ps|source-line|clean}
+EOF
+}
+
 run_docker() {
   if docker info >/dev/null 2>&1; then
     docker "$@"
@@ -57,6 +67,16 @@ run_docker() {
   fi
   printf '%s\n' "Docker daemon is not reachable for the current user." >&2
   exit 1
+}
+
+docker_available() {
+  if docker info >/dev/null 2>&1; then
+    return 0
+  fi
+  if command -v sudo >/dev/null 2>&1 && sudo -n docker info >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
 }
 
 release_dir() {
@@ -306,6 +326,74 @@ build_images() {
   run_docker build -f "$root_dir/infra/fail2ban/Dockerfile" -t "$fail2ban_image" "$root_dir"
 }
 
+remove_path_if_present() {
+  path="$1"
+  if [ -e "$path" ] || [ -L "$path" ]; then
+    rm -rf "$path"
+    printf '%s\n' "Removed $path"
+  fi
+}
+
+remove_file_if_present() {
+  file="$1"
+  if [ -f "$file" ] || [ -L "$file" ]; then
+    rm -f "$file"
+    printf '%s\n' "Removed $file"
+  fi
+}
+
+remove_docker_project_resources() {
+  if ! docker_available; then
+    printf '%s\n' "Skipping Docker cleanup; Docker daemon is not reachable." >&2
+    return
+  fi
+
+  if [ -f "$runtime_env" ] && [ -f "$local_override" ] && [ -L "$current_link" ] && \
+     [ -f "$current_link/docker-compose.yml" ] && [ -f "$current_link/docker-compose.deploy.yml" ]; then
+    compose down --remove-orphans --volumes >/dev/null 2>&1 || true
+  fi
+
+  container_ids=$(run_docker ps -aq --filter "label=com.docker.compose.project=$project_name" 2>/dev/null || true)
+  if [ -n "$container_ids" ]; then
+    # Docker object IDs are whitespace-delimited; splitting is intentional here.
+    if run_docker rm -f $container_ids >/dev/null 2>&1; then
+      printf '%s\n' "Removed Docker containers for project $project_name"
+    fi
+  fi
+
+  network_ids=$(run_docker network ls -q --filter "label=com.docker.compose.project=$project_name" 2>/dev/null || true)
+  if [ -n "$network_ids" ]; then
+    if run_docker network rm $network_ids >/dev/null 2>&1; then
+      printf '%s\n' "Removed Docker networks for project $project_name"
+    fi
+  fi
+
+  volume_ids=$(run_docker volume ls -q --filter "label=com.docker.compose.project=$project_name" 2>/dev/null || true)
+  if [ -n "$volume_ids" ]; then
+    if run_docker volume rm -f $volume_ids >/dev/null 2>&1; then
+      printf '%s\n' "Removed Docker volumes for project $project_name"
+    fi
+  fi
+
+  for image in "$app_image" "$nginx_image" "$fail2ban_image"; do
+    if run_docker image inspect "$image" >/dev/null 2>&1; then
+      if run_docker image rm -f "$image" >/dev/null 2>&1; then
+        printf '%s\n' "Removed Docker image $image"
+      fi
+    fi
+  done
+}
+
+clean_local_artifacts() {
+  remove_docker_project_resources
+  remove_path_if_present "$state_root"
+  remove_path_if_present "$legacy_state_root"
+  remove_file_if_present "$repo_certs_dir/origin.crt"
+  remove_file_if_present "$repo_certs_dir/origin.key"
+  remove_path_if_present "$build_dir"
+  remove_path_if_present "$trafficd_state_dir"
+}
+
 ensure_images() {
   if ! run_docker image inspect "$app_image" >/dev/null 2>&1; then
     build_images
@@ -361,8 +449,11 @@ case "$command" in
     ensure_prepared
     printf 'source %s\n' "$recognita_rc"
     ;;
+  clean)
+    clean_local_artifacts
+    ;;
   *)
-    printf '%s\n' "Usage: $0 {prepare|build|rebuild|up|down|logs|ps|source-line}" >&2
+    usage >&2
     exit 64
     ;;
 esac

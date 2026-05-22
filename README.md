@@ -51,8 +51,13 @@ recognita_compose logs -f app web worker
 ./scripts/local_deploy.sh logs
 ./scripts/local_deploy.sh ps
 ./scripts/local_deploy.sh rebuild
+./scripts/local_deploy.sh clean
 ./scripts/local_deploy.sh source-line
 ```
+
+`clean` stops and removes the local deployment Docker resources for this project,
+then deletes repo-local temporary artifacts such as `.local-deploy/`,
+`infra/nginx/certs/origin.{crt,key}`, `_build/` and `var/trafficd/`.
 
 ## Dev Helper
 
