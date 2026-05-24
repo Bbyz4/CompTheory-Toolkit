@@ -32,6 +32,70 @@ let create_task (state : In_memory_repo_state.state) ~title ~slug ~short_descrip
       end;
       Lwt.return (Ok task)
 
+let update_task (state : In_memory_repo_state.state) ~task_id ~title ~slug
+    ~short_description ~description ~type_ ~author_id ~difficulty ~config
+    ~status ~visibility ~published_at ~updated_at =
+  match In_memory_repo_support.task_by_id state task_id with
+  | None -> Lwt.return (Ok None)
+  | Some current_task -> (
+      match slug with
+      | Some value -> (
+          match Hashtbl.find_opt state.In_memory_repo_state.task_slugs value with
+          | Some existing_id when existing_id <> task_id ->
+              Lwt.return (Error (Repository.Conflict "Task slug already exists"))
+          | _ ->
+              let next_task =
+                {
+                  current_task with
+                  title;
+                  slug;
+                  short_description;
+                  description;
+                  type_;
+                  author_id;
+                  difficulty;
+                  config;
+                  status;
+                  visibility;
+                  published_at;
+                  updated_at;
+                }
+              in
+              begin
+                match current_task.slug with
+                | Some current_slug when current_slug <> value ->
+                    Hashtbl.remove state.task_slugs current_slug
+                | _ -> ()
+              end;
+              Hashtbl.replace state.task_slugs value task_id;
+              Hashtbl.replace state.tasks task_id next_task;
+              Lwt.return (Ok (Some next_task)))
+      | None ->
+          let next_task =
+            {
+              current_task with
+              title;
+              slug = None;
+              short_description;
+              description;
+              type_;
+              author_id;
+              difficulty;
+              config;
+              status;
+              visibility;
+              published_at;
+              updated_at;
+            }
+          in
+          begin
+            match current_task.slug with
+            | Some current_slug -> Hashtbl.remove state.task_slugs current_slug
+            | None -> ()
+          end;
+          Hashtbl.replace state.tasks task_id next_task;
+          Lwt.return (Ok (Some next_task)))
+
 let list_tasks (state : In_memory_repo_state.state) () =
   Lwt.return (Ok (In_memory_repo_support.sorted_tasks state))
 

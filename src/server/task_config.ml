@@ -11,46 +11,82 @@ let require_object field = function
   | `Assoc _ as json -> Ok json
   | _ -> Error (error field "must be a JSON object")
 
+let has_whitespace value =
+  String.exists
+    (function ' ' | '\t' | '\n' | '\r' -> true | _ -> false)
+    value
+
+let validate_word field = function
+  | `String value when has_whitespace value ->
+      Error (error field "must be a single word without whitespace")
+  | `String value -> Ok (`String value)
+  | _ -> Error (error field "must be a string")
+
+let rec validate_word_list field index acc = function
+  | [] -> Ok (`List (List.rev acc))
+  | value :: rest ->
+      let* normalized =
+        validate_word (Printf.sprintf "%s[%d]" field index) value
+      in
+      validate_word_list field (index + 1) (normalized :: acc) rest
+
 module Model_construction = struct
   let config_template =
     `Assoc
       [
-        ("version", `Int 1);
         ("grader", `Assoc [ ("kind", `String "mock") ]);
         ("requiredModelType", `String "NFA");
       ]
 
   let validate_config json =
     let* _object = require_object "config" json in
-    let version =
-      match json |> member "version" with
-      | `Null -> Ok 1
-      | `Int value when value = 1 -> Ok value
-      | `Int _ -> Error (error "config.version" "must currently be equal to 1")
-      | _ -> Error (error "config.version" "must be an integer")
-    in
-    let grader_kind =
-      match json |> member "grader" |> member "kind" with
-      | `Null -> Ok "mock"
-      | `String "mock" -> Ok "mock"
-      | `String _ ->
-          Error (error "config.grader.kind" "must currently be equal to \"mock\"")
-      | _ -> Error (error "config.grader.kind" "must be a string")
+    let grader =
+      match json |> member "grader" with
+      | `Null -> Ok (`Assoc [ ("kind", `String "mock") ])
+      | grader_json -> (
+          let* grader_object = require_object "config.grader" grader_json in
+          match grader_object |> member "kind" with
+          | `Null | `String "mock" ->
+              Ok (`Assoc [ ("kind", `String "mock") ])
+          | `String "explicit-tests" -> (
+              match grader_object |> member "tests" with
+              | `Null ->
+                  Ok
+                    (`Assoc
+                      [
+                        ("kind", `String "explicit-tests");
+                        ("tests", `List []);
+                      ])
+              | `List items ->
+                  let* normalized_tests =
+                    validate_word_list "config.grader.tests" 0 [] items
+                  in
+                  Ok
+                    (`Assoc
+                      [
+                        ("kind", `String "explicit-tests");
+                        ("tests", normalized_tests);
+                      ])
+              | _ -> Error (error "config.grader.tests" "must be an array"))
+          | `String _ ->
+              Error
+                (error "config.grader.kind"
+                   "must be equal to \"mock\" or \"explicit-tests\"")
+          | _ -> Error (error "config.grader.kind" "must be a string"))
     in
     let required_model_type =
       match json |> member "requiredModelType" with
       | `Null -> Ok Domain.Nfa
       | value -> Model_json.parse_model_type "config.requiredModelType" value
     in
-    match version, grader_kind, required_model_type with
-    | Error message, _, _ | _, Error message, _ | _, _, Error message ->
+    match grader, required_model_type with
+    | Error message, _ | _, Error message ->
         Error message
-    | Ok parsed_version, Ok parsed_kind, Ok parsed_required_model_type ->
+    | Ok parsed_grader, Ok parsed_required_model_type ->
         Ok
           (`Assoc
              [
-               ("version", `Int parsed_version);
-               ("grader", `Assoc [ ("kind", `String parsed_kind) ]);
+               ("grader", parsed_grader);
                ( "requiredModelType",
                  `String
                    (Domain.model_type_to_string parsed_required_model_type) );

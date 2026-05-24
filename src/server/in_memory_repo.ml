@@ -26,6 +26,7 @@ let make () =
     mark_user_verified = In_memory_repo_users.mark_user_verified state;
     delete_user = In_memory_repo_users.delete_user state;
     create_task = In_memory_repo_tasks.create_task state;
+    update_task = In_memory_repo_tasks.update_task state;
     list_tasks = In_memory_repo_tasks.list_tasks state;
     find_task_by_id = In_memory_repo_tasks.find_task_by_id state;
     find_task_by_slug = In_memory_repo_tasks.find_task_by_slug state;

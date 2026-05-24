@@ -22,6 +22,8 @@ if [ "$#" -eq 0 ]; then
 fi
 
 if [ "${IN_DEV_CONTAINER:-}" = "1" ]; then
+  # In the devcontainer, use the deployment-like local stack if it was prepared.
+  . ./scripts/load_local_deploy_env.sh
   exec opam exec -- "$@"
 fi
 

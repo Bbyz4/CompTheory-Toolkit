@@ -77,6 +77,21 @@ type t = {
     created_at:float ->
     updated_at:float ->
     (Domain.task, error) result Lwt.t;
+  update_task :
+    task_id:int ->
+    title:string ->
+    slug:string option ->
+    short_description:string option ->
+    description:string ->
+    type_:Domain.task_type ->
+    author_id:int ->
+    difficulty:int ->
+    config:Yojson.Basic.t ->
+    status:Domain.task_status ->
+    visibility:Domain.task_visibility ->
+    published_at:float option ->
+    updated_at:float ->
+    (Domain.task option, error) result Lwt.t;
   list_tasks : unit -> (Domain.task list, error) result Lwt.t;
   find_task_by_id : int -> (Domain.task option, error) result Lwt.t;
   find_task_by_slug : string -> (Domain.task option, error) result Lwt.t;

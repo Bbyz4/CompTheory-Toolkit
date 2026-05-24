@@ -28,16 +28,20 @@ mail_from=${LOCAL_DEPLOY_MAIL_FROM:-no-reply@localhost}
 postgres_db=${LOCAL_DEPLOY_POSTGRES_DB:-toolkit}
 postgres_user=${LOCAL_DEPLOY_POSTGRES_USER:-toolkit}
 postgres_password=${LOCAL_DEPLOY_POSTGRES_PASSWORD:-toolkit}
+postgres_public_port=${LOCAL_DEPLOY_POSTGRES_PUBLIC_PORT:-5432}
 dbro_user=${LOCAL_DEPLOY_DBRO_USER:-recognita_ro}
 dbro_password=${LOCAL_DEPLOY_DBRO_PASSWORD:-recognita-ro-local}
 dbrw_user=${LOCAL_DEPLOY_DBRW_USER:-recognita_rw}
 dbrw_password=${LOCAL_DEPLOY_DBRW_PASSWORD:-recognita-rw-local}
+rabbitmq_image=${LOCAL_DEPLOY_RABBITMQ_IMAGE:-rabbitmq:4.1.4-management-alpine}
 rabbitmq_user=${LOCAL_DEPLOY_RABBITMQ_USER:-recognita}
 rabbitmq_password=${LOCAL_DEPLOY_RABBITMQ_PASSWORD:-recognita-rabbit-local}
+rabbitmq_public_port=${LOCAL_DEPLOY_RABBITMQ_PUBLIC_PORT:-5672}
+rabbitmq_management_public_port=${LOCAL_DEPLOY_RABBITMQ_MANAGEMENT_PUBLIC_PORT:-15672}
+smtp_public_port=${LOCAL_DEPLOY_SMTP_PUBLIC_PORT:-1025}
+mailpit_ui_public_port=${LOCAL_DEPLOY_MAILPIT_UI_PUBLIC_PORT:-8025}
 recognita_admin_username=${LOCAL_DEPLOY_RECOGNITA_ADMIN_USERNAME:-recognita_admin}
-recognita_admin_password=${LOCAL_DEPLOY_RECOGNITA_ADMIN_PASSWORD:-RecognitaAdminLocal1!}
-access_gate_code=${LOCAL_DEPLOY_ACCESS_GATE_CODE:-pezarski}
-access_gate_cookie_secret=${LOCAL_DEPLOY_ACCESS_GATE_COOKIE_SECRET:-recognita-local-gate-cookie-secret-v1}
+recognita_admin_password=${LOCAL_DEPLOY_RECOGNITA_ADMIN_PASSWORD:-change-me}
 trafficd_seed=${LOCAL_DEPLOY_TRAFFICD_SEED:-20260508}
 trafficd_rate=${LOCAL_DEPLOY_TRAFFICD_RATE:-3.0}
 trafficd_report_every=${LOCAL_DEPLOY_TRAFFICD_REPORT_EVERY:-100}
@@ -79,12 +83,75 @@ docker_available() {
   return 1
 }
 
+compose_with_runtime_env() {
+  (
+    while IFS='=' read -r key _; do
+      case "$key" in
+        ""|\#*) continue
+          ;;
+      esac
+      unset "$key"
+    done < "$runtime_env"
+
+    run_docker compose -p "$project_name" --env-file "$runtime_env" \
+      -f "$current_link/docker-compose.yml" \
+      -f "$current_link/docker-compose.deploy.yml" \
+      -f "$local_override" "$@"
+  )
+}
+
 release_dir() {
   if [ -L "$current_link" ] || [ -d "$current_link" ]; then
     readlink "$current_link" 2>/dev/null || printf '%s\n' "$current_link"
   else
     printf '%s\n' ""
   fi
+}
+
+resolve_host_workspace_dir() {
+  if [ "${IN_DEV_CONTAINER:-}" != "1" ]; then
+    printf '%s\n' "$root_dir"
+    return
+  fi
+
+  if [ -n "${HOST_WORKSPACE_PATH:-}" ]; then
+    printf '%s\n' "$HOST_WORKSPACE_PATH"
+    return
+  fi
+
+  if [ -n "${HOSTNAME:-}" ]; then
+    host_workspace_dir=$(run_docker inspect \
+      -f '{{range .Mounts}}{{if eq .Destination "/workspace"}}{{.Source}}{{end}}{{end}}' \
+      "$HOSTNAME" 2>/dev/null || true)
+    if [ -n "$host_workspace_dir" ]; then
+      printf '%s\n' "$host_workspace_dir"
+      return
+    fi
+  fi
+
+  printf '%s\n' \
+    "Unable to resolve the host workspace path from inside the devcontainer." >&2
+  printf '%s\n' \
+    "Set HOST_WORKSPACE_PATH to the host path of this repo and retry." >&2
+  exit 1
+}
+
+docker_build_supports_buildx() {
+  run_docker buildx version >/dev/null 2>&1
+}
+
+docker_build_image() {
+  image_tag="$1"
+  dockerfile_path="$2"
+  build_context="$3"
+  shift 3
+
+  if docker_build_supports_buildx; then
+    run_docker buildx build --load -f "$dockerfile_path" -t "$image_tag" "$@" "$build_context"
+    return
+  fi
+
+  run_docker build -f "$dockerfile_path" -t "$image_tag" "$@" "$build_context"
 }
 
 ensure_dirs() {
@@ -94,6 +161,17 @@ ensure_dirs() {
 generate_local_override() {
   cat > "$local_override" <<EOF
 services:
+  db:
+    ports:
+      - "${POSTGRES_PUBLIC_PORT:-5432}:5432"
+  rabbitmq:
+    ports:
+      - "${RABBITMQ_PUBLIC_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PUBLIC_PORT:-15672}:15672"
+  mailpit:
+    ports:
+      - "${SMTP_PUBLIC_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PUBLIC_PORT:-8025}:8025"
   app:
     pull_policy: never
   web:
@@ -110,12 +188,13 @@ EOF
 prepare_release() {
   ensure_dirs
   next_release=$(mktemp -d "$releases_dir/release.XXXXXX")
+  next_release_name=$(basename "$next_release")
   mkdir -p "$next_release/scripts"
   cp "$root_dir/docker-compose.yml" "$next_release/docker-compose.yml"
   cp "$root_dir/docker-compose.deploy.yml" "$next_release/docker-compose.deploy.yml"
   cp "$root_dir/scripts/generate_deploy_cert.sh" "$next_release/scripts/generate_deploy_cert.sh"
   cp "$root_dir/scripts/provision_db_access.sql" "$next_release/scripts/provision_db_access.sql"
-  ln -sfn "$next_release" "$current_link"
+  ln -sfn "releases/$next_release_name" "$current_link"
 }
 
 write_runtime_env() {
@@ -125,15 +204,22 @@ PROJECT_NAME=$project_name
 APP_IMAGE=$app_image
 NGINX_IMAGE=$nginx_image
 FAIL2BAN_IMAGE=$fail2ban_image
+RABBITMQ_IMAGE=$rabbitmq_image
 POSTGRES_DB=$postgres_db
 POSTGRES_USER=$postgres_user
 POSTGRES_PASSWORD=$postgres_password
+POSTGRES_PUBLIC_PORT=$postgres_public_port
 DBRO_USER=$dbro_user
 DBRO_PASSWORD=$dbro_password
 DBRW_USER=$dbrw_user
 DBRW_PASSWORD=$dbrw_password
 RABBITMQ_USER=$rabbitmq_user
 RABBITMQ_PASSWORD=$rabbitmq_password
+RABBITMQ_PUBLIC_PORT=$rabbitmq_public_port
+RABBITMQ_MANAGEMENT_PUBLIC_PORT=$rabbitmq_management_public_port
+RABBITMQ_API_BASE_URL=http://rabbitmq:15672
+RABBITMQ_VHOST=/
+RABBITMQ_SUBMISSION_QUEUE=submissions.pending
 APP_HOST=0.0.0.0
 APP_PORT=8080
 APP_BASE_URL=$app_base_url
@@ -148,9 +234,7 @@ NGINX_SERVER_NAME=$server_name
 NGINX_ENABLE_TLS=$nginx_enable_tls
 NGINX_TLS_CERT_FILE=/etc/nginx/certs/origin.crt
 NGINX_TLS_KEY_FILE=/etc/nginx/certs/origin.key
-NGINX_CERTS_DIR=$nginx_certs_dir
-ACCESS_GATE_CODE=$access_gate_code
-ACCESS_GATE_COOKIE_SECRET=$access_gate_cookie_secret
+NGINX_CERTS_DIR=$nginx_certs_dir_host
 DATABASE_URL=postgresql://$postgres_user:$postgres_password@db:5432/$postgres_db
 DATABASE_URL_RO=postgresql://$dbro_user:$dbro_password@db:5432/$postgres_db
 DATABASE_URL_RW=postgresql://$dbrw_user:$dbrw_password@db:5432/$postgres_db
@@ -163,6 +247,8 @@ AUTH_RATE_LIMIT_WINDOW_SECONDS=60
 AUTH_RATE_LIMIT_MAX_REQUESTS=20
 SMTP_HOST=mailpit
 SMTP_PORT=1025
+SMTP_PUBLIC_PORT=$smtp_public_port
+MAILPIT_UI_PUBLIC_PORT=$mailpit_ui_public_port
 MAILPIT_WEBROOT=$mailpit_webroot
 MAIL_FROM=$mail_from
 RECOGNITA_ADMIN_USERNAME=$recognita_admin_username
@@ -174,6 +260,7 @@ TRAFFICD_SEED=$trafficd_seed
 TRAFFICD_RATE=$trafficd_rate
 TRAFFICD_REPORT_EVERY=$trafficd_report_every
 TRAFFICD_ADMIN_CLIENT_ID=$trafficd_admin_client_id
+SUBMISSION_WORKER_POLL_INTERVAL_SECONDS=1
 EOF
 }
 
@@ -200,10 +287,20 @@ recognita_docker() {
 }
 
 recognita_compose() {
-  recognita_docker compose -p "$project_name" --env-file "$runtime_env" \
-    -f "$current_link/docker-compose.yml" \
-    -f "$current_link/docker-compose.deploy.yml" \
-    -f "$local_override" "\$@"
+  (
+    while IFS='=' read -r key _; do
+      case "\$key" in
+        ""|\#*) continue
+          ;;
+      esac
+      unset "\$key"
+    done < "$runtime_env"
+
+    recognita_docker compose -p "$project_name" --env-file "$runtime_env" \
+      -f "$current_link/docker-compose.yml" \
+      -f "$current_link/docker-compose.deploy.yml" \
+      -f "$local_override" "\$@"
+  )
 }
 
 alias rcompose='recognita_compose'
@@ -290,6 +387,7 @@ install_shell_include() {
 }
 
 prepare() {
+  nginx_certs_dir_host=$(resolve_host_workspace_dir)/.local-deploy/state/nginx-certs
   prepare_release
   generate_local_override
   write_runtime_env
@@ -314,16 +412,13 @@ ensure_prepared() {
 }
 
 compose() {
-  run_docker compose -p "$project_name" --env-file "$runtime_env" \
-    -f "$current_link/docker-compose.yml" \
-    -f "$current_link/docker-compose.deploy.yml" \
-    -f "$local_override" "$@"
+  compose_with_runtime_env "$@"
 }
 
 build_images() {
-  run_docker build -f "$root_dir/Dockerfile" --target runtime -t "$app_image" "$root_dir"
-  run_docker build -f "$root_dir/infra/nginx/Dockerfile" -t "$nginx_image" "$root_dir"
-  run_docker build -f "$root_dir/infra/fail2ban/Dockerfile" -t "$fail2ban_image" "$root_dir"
+  docker_build_image "$app_image" "$root_dir/Dockerfile" "$root_dir" --target runtime
+  docker_build_image "$nginx_image" "$root_dir/infra/nginx/Dockerfile" "$root_dir"
+  docker_build_image "$fail2ban_image" "$root_dir/infra/fail2ban/Dockerfile" "$root_dir"
 }
 
 remove_path_if_present() {

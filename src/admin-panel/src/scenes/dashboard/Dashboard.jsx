@@ -69,7 +69,7 @@ const Dashboard = () => {
         <CircularProgress size={28} />
       ) : (
         <Box display="flex" gap={2} flexWrap="wrap">
-          <StatCard label="Published tasks" value={stats.tasks} />
+          <StatCard label="Tasks" value={stats.tasks} />
           <StatCard label="Users" value={stats.users} />
           <StatCard label="Submissions" value={stats.submissions} />
           <StatCard label="Banned users" value={stats.bannedUsers} />

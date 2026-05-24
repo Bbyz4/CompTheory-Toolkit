@@ -18,12 +18,12 @@ import { getTasks } from '../../services/taskService';
 const StyledTableCell = styled(TableCell)(() => ({
   [`&.${tableCellClasses.head}`]: {
     backgroundColor: 'var(--accent-dark)',
-    color: 'var(--text-h)',
+    color: 'var(--accent-contrast)',
     borderBottom: '1px solid var(--border)',
     fontWeight: 'bold',
   },
   [`&.${tableCellClasses.body}`]: {
-    color: 'var(--text)',
+    color: 'var(--text-h)',
     backgroundColor: 'var(--box)',
     borderBottom: '1px solid var(--border)',
   },

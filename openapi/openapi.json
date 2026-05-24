@@ -342,9 +342,25 @@
     "/api/v1/tasks": {
       "get": {
         "summary": "List public published tasks",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all"
+              ]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Task list"
+          },
+          "403": {
+            "description": "Admin only for scope=all"
           }
         }
       },
@@ -381,6 +397,35 @@
         "responses": {
           "200": {
             "description": "Task returned"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a task",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task updated"
+          },
+          "403": {
+            "description": "Admin only"
           },
           "404": {
             "description": "Task not found"

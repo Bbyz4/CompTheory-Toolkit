@@ -279,6 +279,28 @@ let make (db : Caqti_lwt.connection) =
       | Ok json -> parse_task_list json
       | Error error -> Error (map_caqti_error error))
   in
+  let update_task ~task_id ~title ~slug ~short_description ~description ~type_
+      ~author_id:_ ~difficulty ~config ~status ~visibility ~published_at
+      ~updated_at =
+    let* result =
+      Db.find_opt Q.update_task
+        ( title,
+          slug,
+          short_description,
+          ( description,
+            Domain.task_type_to_string type_,
+            difficulty,
+            ( Yojson.Basic.to_string config,
+              Domain.task_status_to_string status,
+              Domain.task_visibility_to_string visibility,
+              (published_at, updated_at, task_id) ) ) )
+    in
+    Lwt.return
+      (match result with
+      | Ok None -> Ok None
+      | Ok (Some json) -> Result.map Option.some (parse_task json)
+      | Error error -> Error (map_caqti_error error))
+  in
   let find_task_by_id task_id =
     let* result = Db.find_opt Q.find_task_by_id task_id in
     Lwt.return
@@ -367,6 +389,7 @@ let make (db : Caqti_lwt.connection) =
     mark_user_verified;
     delete_user;
     create_task;
+    update_task;
     list_tasks;
     find_task_by_id;
     find_task_by_slug;

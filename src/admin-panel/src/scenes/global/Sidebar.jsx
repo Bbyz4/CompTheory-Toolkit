@@ -12,7 +12,7 @@ import TaskIcon from '@mui/icons-material/Task';
 const Sidebar = () => {
   return (
     <div className="sidebar">
-      <h1>MODDELLE</h1>
+      <h1>Recognita</h1>
       <ul>
         <li>
           <Link to="/dashboard"><DashboardIcon/> Dashboard</Link>

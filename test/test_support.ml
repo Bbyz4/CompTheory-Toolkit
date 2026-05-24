@@ -154,11 +154,11 @@ let unwrap_ok result = unwrap_result (fun message -> message) result
 let unwrap_repo_ok result =
   unwrap_result Toolkit.Repository.error_message result
 
-let model_construction_config ?(required_model_type = "NFA") () =
+let model_construction_config ?(required_model_type = "NFA")
+    ?(grader = `Assoc [ ("kind", `String "mock") ]) () =
   `Assoc
     [
-      ("version", `Int 1);
-      ("grader", `Assoc [ ("kind", `String "mock") ]);
+      ("grader", grader);
       ("requiredModelType", `String required_model_type);
     ]
 
@@ -379,17 +379,8 @@ let web_config () : Toolkit.Web_config.t =
     port = 8081;
     api_base_url = "http://127.0.0.1:8080";
     site_name = "Recognita";
-    access_code = "pezarski";
-    access_cookie_secret = "test-gate-secret";
     admin_panel_dist_dir = "src/admin-panel/dist";
-    recognita_admin_username = Some "recognita_admin";
-    recognita_admin_password = Some "change-me";
   }
-
-let web_cookie_from_response response =
-  match Dream.header response "set-cookie" with
-  | Some cookie -> List.hd (String.split_on_char ';' cookie)
-  | None -> fail "Expected access gate to set a cookie"
 
 let make_admin_cli_fixture () =
   let config = base_config () in

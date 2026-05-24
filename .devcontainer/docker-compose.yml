@@ -1,0 +1,49 @@
+services:
+  workspace:
+    image: comp-theory-toolkit-devcontainer:dev
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: dev
+    working_dir: /workspace
+    init: true
+    user: root
+    command: ["sh", "/workspace/scripts/devcontainer_init.sh"]
+    environment:
+      APP_MODE: local
+      IN_DEV_CONTAINER: "1"
+      APP_HOST: ${APP_HOST:-0.0.0.0}
+      APP_PORT: ${APP_PORT:-8080}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+      PUBLIC_WEB_BASE_URL: ${PUBLIC_WEB_BASE_URL:-http://localhost:8081}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://toolkit:toolkit@host.docker.internal:5432/toolkit}
+      ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}
+      REFRESH_TOKEN_TTL_SECONDS: ${REFRESH_TOKEN_TTL_SECONDS:-604800}
+      VERIFICATION_TOKEN_TTL_SECONDS: ${VERIFICATION_TOKEN_TTL_SECONDS:-86400}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-120}
+      AUTH_RATE_LIMIT_WINDOW_SECONDS: ${AUTH_RATE_LIMIT_WINDOW_SECONDS:-60}
+      AUTH_RATE_LIMIT_MAX_REQUESTS: ${AUTH_RATE_LIMIT_MAX_REQUESTS:-20}
+      SMTP_HOST: ${SMTP_HOST:-host.docker.internal}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@recognita.xyz}
+      RECOGNITA_ADMIN_USERNAME: ${RECOGNITA_ADMIN_USERNAME:-}
+      RECOGNITA_ADMIN_PASSWORD: ${RECOGNITA_ADMIN_PASSWORD:-}
+      RABBITMQ_API_BASE_URL: ${RABBITMQ_API_BASE_URL:-http://host.docker.internal:15672}
+      RABBITMQ_USER: ${RABBITMQ_USER:-recognita}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-recognita}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+      RABBITMQ_SUBMISSION_QUEUE: ${RABBITMQ_SUBMISSION_QUEUE:-submissions.pending}
+      SUBMISSION_WORKER_POLL_INTERVAL_SECONDS: ${SUBMISSION_WORKER_POLL_INTERVAL_SECONDS:-1}
+      WEB_HOST: ${WEB_HOST:-0.0.0.0}
+      WEB_PORT: ${WEB_PORT:-8081}
+      API_BASE_URL: ${API_BASE_URL:-http://127.0.0.1:8080}
+      SITE_NAME: ${SITE_NAME:-Recognita}
+      DOCKER_HOST: unix:///var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ..:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    stdin_open: true
+    tty: true

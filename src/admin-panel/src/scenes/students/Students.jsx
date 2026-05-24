@@ -8,7 +8,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Typography,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import TableCell, { tableCellClasses } from '@mui/material/TableCell';
@@ -19,12 +18,12 @@ import { banUser, getUsers, unbanUser } from '../../services/userService';
 const StyledTableCell = styled(TableCell)(() => ({
   [`&.${tableCellClasses.head}`]: {
     backgroundColor: 'var(--accent-dark)',
-    color: 'var(--text-h)',
+    color: 'var(--accent-contrast)',
     borderBottom: '1px solid var(--border)',
     fontWeight: 'bold',
   },
   [`&.${tableCellClasses.body}`]: {
-    color: 'var(--text)',
+    color: 'var(--text-h)',
     backgroundColor: 'var(--box)',
     borderBottom: '1px solid var(--border)',
   },
@@ -153,9 +152,6 @@ const Students = () => {
           </TableBody>
         </Table>
       </TableContainer>
-      <Typography sx={{ mt: 2, color: 'var(--text)' }}>
-        The admin account is managed on the server side and is not exposed here.
-      </Typography>
     </div>
   );
 };

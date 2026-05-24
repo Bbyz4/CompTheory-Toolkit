@@ -1,23 +1,22 @@
 {
   "name": "CompTheory Toolkit",
-  "dockerComposeFile": [
-    "../docker-compose.yml",
-    "../docker-compose.dev.yml"
-  ],
-  "service": "dev",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "workspace",
   "workspaceFolder": "/workspace",
   "shutdownAction": "stopCompose",
-  "runServices": [
-    "db",
-    "mailpit"
-  ],
   "overrideCommand": false,
   "remoteUser": "opam",
+  "remoteEnv": {
+    "HOST_WORKSPACE_PATH": "${localWorkspaceFolder}"
+  },
+  "updateRemoteUserUID": true,
   "forwardPorts": [
-    5432,
-    8025,
     8080,
-    8081
+    8081,
+    8443,
+    8025,
+    15672,
+    5432
   ],
   "postCreateCommand": "git config --global --add safe.directory /workspace && opam exec -- dune build @all",
   "customizations": {

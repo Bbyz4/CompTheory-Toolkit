@@ -2,9 +2,10 @@ name: ci
 
 on:
   push:
-    branches: ["server"]
+    branches: ["**"]
   pull_request:
-    branches: ["server"]
+    branches: ["**"]
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -39,6 +40,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/admin-panel/package-lock.json
+
       - name: Set up OCaml
         uses: ocaml/setup-ocaml@v3
         with:
@@ -55,12 +63,18 @@ jobs:
       - name: Build
         run: opam exec -- dune build @all
 
+      - name: Build admin panel
+        working-directory: src/admin-panel
+        run: |
+          npm ci
+          npm run build
+
       - name: Test
         run: opam exec -- dune runtest
 
   build-image:
     needs: build-test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/server'
+    if: github.event_name == 'push' && github.ref_name == 'merge-components'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -85,13 +99,16 @@ jobs:
         env:
           OWNER: ${{ github.repository_owner }}
           SHA: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
         run: |
           owner_lc=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')
           image_tag="sha-$SHA"
+          branch_tag=$(printf '%s' "$BRANCH" | tr '/[:upper:]' '-[:lower:]')
           app_image_name="ghcr.io/$owner_lc/comp-theory-toolkit"
           nginx_image_name="ghcr.io/$owner_lc/comp-theory-toolkit-nginx"
           fail2ban_image_name="ghcr.io/$owner_lc/comp-theory-toolkit-fail2ban"
           printf 'image_tag=%s\n' "$image_tag" >> "$GITHUB_OUTPUT"
+          printf 'branch_tag=%s\n' "$branch_tag" >> "$GITHUB_OUTPUT"
           printf 'app_image_name=%s\n' "$app_image_name" >> "$GITHUB_OUTPUT"
           printf 'nginx_image_name=%s\n' "$nginx_image_name" >> "$GITHUB_OUTPUT"
           printf 'fail2ban_image_name=%s\n' "$fail2ban_image_name" >> "$GITHUB_OUTPUT"
@@ -115,7 +132,7 @@ jobs:
           push: true
           tags: |
             ${{ steps.image.outputs.app_image_ref }}
-            ${{ steps.image.outputs.app_image_name }}:server
+            ${{ steps.image.outputs.app_image_name }}:${{ steps.image.outputs.branch_tag }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -130,7 +147,7 @@ jobs:
           push: true
           tags: |
             ${{ steps.image.outputs.nginx_image_ref }}
-            ${{ steps.image.outputs.nginx_image_name }}:server
+            ${{ steps.image.outputs.nginx_image_name }}:${{ steps.image.outputs.branch_tag }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -145,7 +162,7 @@ jobs:
           push: true
           tags: |
             ${{ steps.image.outputs.fail2ban_image_ref }}
-            ${{ steps.image.outputs.fail2ban_image_name }}:server
+            ${{ steps.image.outputs.fail2ban_image_name }}:${{ steps.image.outputs.branch_tag }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -154,7 +171,7 @@ jobs:
 
   deploy:
     needs: build-image
-    if: github.event_name == 'push' && github.ref == 'refs/heads/server'
+    if: github.event_name == 'push' && github.ref_name == 'merge-components'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -178,14 +195,12 @@ jobs:
         env:
           SERVER_ADDRESS: ${{ secrets.SERVER_ADDRESS }}
           SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
-          SECRET_CODE: ${{ secrets.SECRET_CODE }}
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           DBRO_PASSWORD: ${{ secrets.DBRO_PASSWORD }}
           DBRW_PASSWORD: ${{ secrets.DBRW_PASSWORD }}
           RABBITMQ_PASSWORD: ${{ secrets.RABBITMQ_PASSWORD }}
-          ACCESS_GATE_COOKIE_SECRET: ${{ secrets.ACCESS_GATE_COOKIE_SECRET }}
           RECOGNITA_ADMIN_USERNAME: ${{ secrets.RECOGNITA_ADMIN_USERNAME }}
           RECOGNITA_ADMIN_PASSWORD: ${{ secrets.RECOGNITA_ADMIN_PASSWORD }}
           SERVER_DEPLOY_DIR: ${{ vars.SERVER_DEPLOY_DIR }}
@@ -237,7 +252,7 @@ jobs:
             "set -eu; RELEASE_DIR=$(quote "$release_dir"); tar -xzf - -C \"\$RELEASE_DIR\""
 
           ssh "${SERVER_USERNAME}@${SERVER_ADDRESS}" \
-            "DEPLOY_ROOT=${quoted_deploy_root} PROJECT_NAME=${quoted_project_name} RELEASE_DIR=$(quote "$release_dir") SECRET_CODE=$(quote "$SECRET_CODE") GHCR_USERNAME=$(quote "$GHCR_USERNAME") GHCR_TOKEN=$(quote "$GHCR_TOKEN") POSTGRES_PASSWORD=$(quote "$POSTGRES_PASSWORD") DBRO_PASSWORD=$(quote "$DBRO_PASSWORD") DBRW_PASSWORD=$(quote "$DBRW_PASSWORD") RABBITMQ_PASSWORD=$(quote "$RABBITMQ_PASSWORD") ACCESS_GATE_COOKIE_SECRET=$(quote "$ACCESS_GATE_COOKIE_SECRET") RECOGNITA_ADMIN_USERNAME=$(quote "$RECOGNITA_ADMIN_USERNAME") RECOGNITA_ADMIN_PASSWORD=$(quote "$RECOGNITA_ADMIN_PASSWORD") NGINX_SERVER_NAME=$(quote "$NGINX_SERVER_NAME") APP_BASE_URL=$(quote "$APP_BASE_URL") PUBLIC_WEB_BASE_URL=$(quote "$PUBLIC_WEB_BASE_URL") MAIL_FROM=$(quote "$MAIL_FROM") TZ=$(quote "$TZ") WEB_PUBLIC_PORT=$(quote "$WEB_PUBLIC_PORT") WEB_TLS_PUBLIC_PORT=$(quote "$WEB_TLS_PUBLIC_PORT") NGINX_ENABLE_TLS=$(quote "$NGINX_ENABLE_TLS") POSTGRES_DB=$(quote "$POSTGRES_DB") POSTGRES_USER=$(quote "$POSTGRES_USER") RABBITMQ_USER=$(quote "$RABBITMQ_USER") APP_IMAGE=$(quote "$APP_IMAGE") NGINX_IMAGE=$(quote "$NGINX_IMAGE") FAIL2BAN_IMAGE=$(quote "$FAIL2BAN_IMAGE") bash -se" <<'EOF'
+            "DEPLOY_ROOT=${quoted_deploy_root} PROJECT_NAME=${quoted_project_name} RELEASE_DIR=$(quote "$release_dir") GHCR_USERNAME=$(quote "$GHCR_USERNAME") GHCR_TOKEN=$(quote "$GHCR_TOKEN") POSTGRES_PASSWORD=$(quote "$POSTGRES_PASSWORD") DBRO_PASSWORD=$(quote "$DBRO_PASSWORD") DBRW_PASSWORD=$(quote "$DBRW_PASSWORD") RABBITMQ_PASSWORD=$(quote "$RABBITMQ_PASSWORD") RECOGNITA_ADMIN_USERNAME=$(quote "$RECOGNITA_ADMIN_USERNAME") RECOGNITA_ADMIN_PASSWORD=$(quote "$RECOGNITA_ADMIN_PASSWORD") NGINX_SERVER_NAME=$(quote "$NGINX_SERVER_NAME") APP_BASE_URL=$(quote "$APP_BASE_URL") PUBLIC_WEB_BASE_URL=$(quote "$PUBLIC_WEB_BASE_URL") MAIL_FROM=$(quote "$MAIL_FROM") TZ=$(quote "$TZ") WEB_PUBLIC_PORT=$(quote "$WEB_PUBLIC_PORT") WEB_TLS_PUBLIC_PORT=$(quote "$WEB_TLS_PUBLIC_PORT") NGINX_ENABLE_TLS=$(quote "$NGINX_ENABLE_TLS") POSTGRES_DB=$(quote "$POSTGRES_DB") POSTGRES_USER=$(quote "$POSTGRES_USER") RABBITMQ_USER=$(quote "$RABBITMQ_USER") APP_IMAGE=$(quote "$APP_IMAGE") NGINX_IMAGE=$(quote "$NGINX_IMAGE") FAIL2BAN_IMAGE=$(quote "$FAIL2BAN_IMAGE") bash -se" <<'EOF'
           set -eu
 
           if [ -z "${DEPLOY_ROOT:-}" ]; then
@@ -341,11 +356,6 @@ jobs:
             rabbitmq_password="$(random_hex 24)"
           fi
 
-          cookie_secret="${ACCESS_GATE_COOKIE_SECRET:-$(get_existing ACCESS_GATE_COOKIE_SECRET)}"
-          if [ -z "$cookie_secret" ]; then
-            cookie_secret="$(random_hex 32)"
-          fi
-
           recognita_admin_username="${RECOGNITA_ADMIN_USERNAME:-$(get_existing RECOGNITA_ADMIN_USERNAME)}"
           if [ -z "$recognita_admin_username" ]; then
             recognita_admin_username="recognita_admin"
@@ -409,8 +419,6 @@ jobs:
           set_kv NGINX_SERVER_NAME "$server_name" "$next_env"
           set_kv NGINX_ENABLE_TLS "$nginx_enable_tls" "$next_env"
           set_kv NGINX_CERTS_DIR "$nginx_certs_dir" "$next_env"
-          set_kv ACCESS_GATE_CODE "$SECRET_CODE" "$next_env"
-          set_kv ACCESS_GATE_COOKIE_SECRET "$cookie_secret" "$next_env"
           set_kv RECOGNITA_ADMIN_USERNAME "$recognita_admin_username" "$next_env"
           set_kv RECOGNITA_ADMIN_PASSWORD "$recognita_admin_password" "$next_env"
           set_kv DATABASE_URL "$database_url" "$next_env"

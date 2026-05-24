@@ -244,7 +244,6 @@ let create_task client (session : session) ?client_id ?author_id ~title
       ( "config",
         `Assoc
           [
-            ("version", `Int 1);
             ("grader", `Assoc [ ("kind", `String "mock") ]);
             ("requiredModelType", `String required_model_type);
           ] );

@@ -17,9 +17,8 @@ EOF
       cat <<'EOF' >&2
 Docker CLI is not available.
 
-Install Docker Engine / Docker CLI first, for example on Debian or Ubuntu:
-  sudo apt-get update
-  sudo apt-get install -y docker.io docker-compose-v2
+Install Docker Engine / Docker CLI with the Compose plugin first.
+For Debian or Ubuntu, follow the official Docker Engine installation docs.
 EOF
       ;;
     *)

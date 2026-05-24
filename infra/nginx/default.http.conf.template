@@ -24,32 +24,15 @@ server {
     proxy_pass http://web:8081;
   }
 
-  location = /access {
-    proxy_pass http://web:8081;
-  }
-
-  location = /_recognita/access-check {
-    internal;
-    proxy_pass_request_body off;
-    proxy_set_header Content-Length "";
-    proxy_pass http://web:8081/_recognita/access-check;
-  }
-
   location = /mailpit {
-    auth_request /_recognita/access-check;
-    error_page 401 = /access?return_to=$request_uri;
     proxy_pass http://mailpit:8025/mailpit/;
   }
 
   location ^~ /mailpit/ {
-    auth_request /_recognita/access-check;
-    error_page 401 = /access?return_to=$request_uri;
     proxy_pass http://mailpit:8025;
   }
 
   location / {
-    auth_request /_recognita/access-check;
-    error_page 401 = /access?return_to=$request_uri;
     proxy_pass http://web:8081;
   }
 }

@@ -8,6 +8,7 @@ const mapTask = (task) => ({
   slug: task.slug,
   description: task.description,
   shortDescription: task.short_description,
+  config: task.config ?? {},
   status: task.status,
   visibility: task.visibility,
   createdAt: task.created_at,
@@ -15,6 +16,7 @@ const mapTask = (task) => ({
   publishedAt: task.published_at,
   difficulty: task.difficulty,
   type: task.type,
+  authorId: task.author_id,
 });
 
 const shortDescription = (description) => {
@@ -32,26 +34,51 @@ export const getTasks = async () => {
   return (payload?.tasks ?? []).map(mapTask);
 };
 
-export const createTask = async ({ title, description }) => {
-  const templatePayload = await request(
-    `/task-types/${TASK_TYPE}/config-template`,
-  );
+export const getTaskTypeTemplate = async (taskType = TASK_TYPE) => {
+  return request(`/task-types/${taskType}/config-template`);
+};
 
+const buildTaskPayload = ({
+  title,
+  slug,
+  description,
+  shortDescription: nextShortDescription,
+  type = TASK_TYPE,
+  difficulty = 0,
+  config,
+  status = 'PUBLISHED',
+  visibility = 'PUBLIC',
+}) => ({
+  title,
+  slug: slug?.trim() ? slug.trim() : null,
+  description,
+  short_description: nextShortDescription ?? shortDescription(description),
+  type,
+  difficulty,
+  config,
+  status,
+  visibility,
+});
+
+export const createTask = async (task) => {
   const payload = await request('/tasks', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      title,
-      description,
-      short_description: shortDescription(description),
-      type: TASK_TYPE,
-      difficulty: 0,
-      config: templatePayload?.config_template ?? {},
-      status: 'PUBLISHED',
-      visibility: 'PUBLIC',
-    }),
+    body: JSON.stringify(buildTaskPayload(task)),
+  });
+
+  return mapTask(payload.task);
+};
+
+export const updateTask = async (taskId, task) => {
+  const payload = await request(`/tasks/${taskId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(buildTaskPayload(task)),
   });
 
   return mapTask(payload.task);

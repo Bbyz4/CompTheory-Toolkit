@@ -169,6 +169,15 @@ let task_visibility_from_json json =
       | Some visibility -> Ok visibility
       | None -> Error (App_error.Bad_request "Unknown task visibility"))
 
+type task_list_scope =
+  | Public
+  | All
+
+let task_list_scope_from_request request =
+  match query_value request "scope" with
+  | Some "all" -> All
+  | Some _ | None -> Public
+
 let submission_scope_from_request request =
   match query_value request "scope" with
   | Some "all" -> Task_service.All
@@ -383,11 +392,31 @@ let make app =
                 | Error app_error -> error_response app_error)))
   in
   let handle_tasks request =
-    with_task_deps app request (fun task_deps ->
-        let* result = Task_service.list_public_tasks task_deps in
-        match result with
-        | Ok tasks -> json_response ~code:200 (tasks_json tasks)
-        | Error app_error -> error_response app_error)
+    app.with_repo request (fun repo ->
+        let auth_deps = deps repo app in
+        let current_task_deps = task_deps repo app in
+        match task_list_scope_from_request request with
+        | Public ->
+            let* result = Task_service.list_public_tasks current_task_deps in
+            begin
+              match result with
+              | Ok tasks -> json_response ~code:200 (tasks_json tasks)
+              | Error app_error -> error_response app_error
+            end
+        | All -> (
+            match access_token_from_request request with
+            | Error app_error -> error_response app_error
+            | Ok access_token -> (
+                let* admin_result =
+                  Auth_service.ensure_admin auth_deps ~access_token
+                in
+                match admin_result with
+                | Error app_error -> error_response app_error
+                | Ok _admin_context -> (
+                    let* result = Task_service.list_all_tasks current_task_deps in
+                    match result with
+                    | Ok tasks -> json_response ~code:200 (tasks_json tasks)
+                    | Error app_error -> error_response app_error))))
   in
   let handle_task request =
     app.with_repo request (fun repo ->
@@ -464,6 +493,61 @@ let make app =
                         in
                         match result with
                         | Ok task -> json_response ~code:201 (task_json task)
+                        | Error app_error -> error_response app_error)
+                    | Error app_error, _, _, _, _, _, _, _, _, _, _
+                    | _, Error app_error, _, _, _, _, _, _, _, _, _
+                    | _, _, Error app_error, _, _, _, _, _, _, _, _
+                    | _, _, _, Error app_error, _, _, _, _, _, _, _
+                    | _, _, _, _, Error app_error, _, _, _, _, _, _
+                    | _, _, _, _, _, Error app_error, _, _, _, _, _
+                    | _, _, _, _, _, _, Error app_error, _, _, _, _
+                    | _, _, _, _, _, _, _, Error app_error, _, _, _
+                    | _, _, _, _, _, _, _, _, Error app_error, _, _
+                    | _, _, _, _, _, _, _, _, _, Error app_error, _
+                    | _, _, _, _, _, _, _, _, _, _, Error app_error ->
+                        error_response app_error)))
+  in
+  let handle_update_task request =
+    app.with_repo request (fun repo ->
+        let auth_deps = deps repo app in
+        let current_task_deps = task_deps repo app in
+        match access_token_from_request request, int_of_string_opt (Dream.param request "id") with
+        | Error app_error, _ -> error_response app_error
+        | _, None ->
+            error_response (App_error.Bad_request "Task id must be an integer")
+        | Ok access_token, Some task_id -> (
+            let* admin_result =
+              Auth_service.ensure_admin auth_deps ~access_token
+            in
+            match admin_result with
+            | Error app_error -> error_response app_error
+            | Ok admin_context ->
+                let* json_result = parse_body request in
+                match json_result with
+                | Error app_error -> error_response app_error
+                | Ok json -> (
+                    match
+                      Json_utils.assoc_list json,
+                      Json_utils.string_field json "title",
+                      Json_utils.optional_string_field json "slug",
+                      Json_utils.optional_string_field json "short_description",
+                      Json_utils.string_field json "description",
+                      task_type_from_json json,
+                      Json_utils.optional_int_field json "author_id",
+                      Json_utils.int_field json "difficulty",
+                      Json_utils.object_field json "config",
+                      task_status_from_json json,
+                      task_visibility_from_json json
+                    with
+                    | Ok _, Ok title, Ok slug, Ok short_description, Ok description, Ok type_, Ok author_id, Ok difficulty, Ok config, Ok status, Ok visibility -> (
+                        let* result =
+                          Task_service.update_task current_task_deps
+                            ~admin_context ~task_id ~title ~slug
+                            ~short_description ~description ~type_ ?author_id
+                            ~difficulty ~config ~status ~visibility ()
+                        in
+                        match result with
+                        | Ok task -> json_response ~code:200 (task_json task)
                         | Error app_error -> error_response app_error)
                     | Error app_error, _, _, _, _, _, _, _, _, _, _
                     | _, Error app_error, _, _, _, _, _, _, _, _, _
@@ -592,6 +676,7 @@ let make app =
         Dream.get "/tasks/:id" handle_task;
         Dream.get "/tasks/slug/:slug" handle_task_by_slug;
         Dream.post "/tasks" handle_create_task;
+        Dream.put "/tasks/:id" handle_update_task;
         Dream.post "/tasks/:id/submissions" handle_create_submission;
         Dream.get "/submissions" handle_submissions;
         Dream.get "/submissions/:id" handle_submission;

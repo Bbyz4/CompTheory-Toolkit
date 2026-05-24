@@ -74,6 +74,26 @@ let test_caqti_repo_task_and_submission_roundtrip () =
       let found_task = unwrap_repo_ok found_task in
       let* listed_tasks = repo.list_tasks () in
       let listed_tasks = unwrap_repo_ok listed_tasks in
+      let* updated_task =
+        repo.update_task ~task_id:task.id ~title:"Database task updated"
+          ~slug:(Some "database-task-updated")
+          ~short_description:(Some "Updated short description")
+          ~description:"Updated task body"
+          ~type_:Toolkit.Domain.Model_construction ~author_id:author.id
+          ~difficulty:5
+          ~config:
+            (model_construction_config
+               ~grader:
+                 (`Assoc
+                   [
+                     ("kind", `String "explicit-tests");
+                     ("tests", `List [ `String "ab"; `String "ba" ]);
+                   ])
+               ())
+          ~status:Toolkit.Domain.Draft ~visibility:Toolkit.Domain.Private
+          ~published_at:None ~updated_at:(now +. 0.5)
+      in
+      let updated_task = unwrap_repo_ok updated_task in
       let* submission =
         repo.create_submission ~task_id:task.id ~user_id:submitter.id
           ~data:(valid_nfa_submission_data ())
@@ -101,6 +121,17 @@ let test_caqti_repo_task_and_submission_roundtrip () =
            (fun (current : Toolkit.Domain.task) -> current.id = task.id)
            listed_tasks)
         "Caqti repo should list the created task";
+      begin
+        match updated_task with
+        | Some current ->
+            assert_true
+              (current.slug = Some "database-task-updated")
+              "Caqti repo should update the task slug";
+            assert_true
+              (current.status = Toolkit.Domain.Draft)
+              "Caqti repo should update the task status"
+        | None -> fail "Expected updated task to be returned"
+      end;
       assert_true
         (List.exists
            (fun (current : Toolkit.Domain.submission) -> current.id = submission.id)

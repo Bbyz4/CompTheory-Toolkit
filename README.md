@@ -23,6 +23,7 @@ Default local endpoints:
 - TLS via nginx: `https://localhost:8443`
 - Mailpit: `http://localhost:8025`
 - RabbitMQ management: `http://localhost:15672`
+- PostgreSQL: `localhost:5432`
 
 Useful operational commands after `source`:
 
@@ -79,14 +80,38 @@ Examples:
 ./scripts/dev_helper.sh run-trafficcli
 ```
 
+## VS Code Devcontainer
+
+The repo includes a VS Code devcontainer intended to run `local_deploy`
+from inside the container, not to boot a parallel dev stack on its own.
+
+Open the folder in VS Code and choose `Reopen in Container`, then use:
+
+```bash
+./scripts/local_deploy.sh up
+source ./.local-deploy/state/.recognitarc
+recognita_compose ps
+./scripts/dev_helper.sh test
+```
+
+The devcontainer mounts `/var/run/docker.sock`, so Docker commands executed
+inside VS Code control the host Docker daemon and can build or start the
+deployment-like local stack from `scripts/local_deploy.sh`.
+
+When `.local-deploy/state/.env.deploy.runtime` exists, `./bin/dev` and
+`./scripts/dev_helper.sh` automatically remap database, SMTP and RabbitMQ
+access from the devcontainer to the host-published local deploy ports.
+
 ## API Shape
 
 Most important flows:
 - `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`
 - `GET /api/v1/me`, `DELETE /api/v1/me`
 - `GET /api/v1/tasks`
+- `GET /api/v1/tasks?scope=all` for admin task listing including drafts/private tasks
 - `GET /api/v1/tasks/slug/:slug`
 - `POST /api/v1/tasks` for admin task creation
+- `PUT /api/v1/tasks/:id` for admin task editing
 - `GET /api/v1/task-types/MODEL_CONSTRUCTION/config-template`
 - `POST /api/v1/tasks/:id/submissions`
 - `GET /api/v1/submissions`, `GET /api/v1/submissions/:id`
@@ -163,11 +188,9 @@ Important GitHub secrets:
 - `SERVER_ADDRESS`
 - `SERVER_USERNAME`
 - `SERVER_PRIVATE_KEY`
-- `SECRET_CODE`
 
 Common optional secrets/vars:
 - `POSTGRES_PASSWORD`
-- `ACCESS_GATE_COOKIE_SECRET`
 - `GHCR_USERNAME`, `GHCR_TOKEN`
 - `SERVER_DEPLOY_DIR`
 - `SERVER_PROJECT_NAME`

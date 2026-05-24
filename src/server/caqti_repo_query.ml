@@ -945,6 +945,31 @@ module Q = struct
     Caqti_type.(string ->? string)
       ("SELECT " ^ task_json ^ " FROM tasks WHERE slug = ?")
 
+  let update_task =
+    Caqti_type.(
+      tup4 string (option string) (option string)
+        (tup4 string string int
+           (tup4 string string string (tup3 (option float) float int)))
+      ->? string)
+      ({|
+        UPDATE tasks
+        SET
+          title = ?,
+          slug = ?,
+          short_description = ?,
+          description = ?,
+          type = CAST(? AS task_type),
+          difficulty = ?,
+          config = CAST(? AS jsonb),
+          status = CAST(? AS task_status),
+          visibility = CAST(? AS task_visibility),
+          published_at = to_timestamp(?),
+          updated_at = to_timestamp(?)
+        WHERE id = ?
+        RETURNING
+      |}
+      ^ task_json)
+
   let create_submission =
     Caqti_type.(tup4 int int string float ->! string)
       ({|

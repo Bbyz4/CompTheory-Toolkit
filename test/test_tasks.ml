@@ -155,12 +155,105 @@ let test_task_config_template_endpoint () =
     = "mock")
     "Task config template endpoint should return the mock grader template";
   assert_true
+    (json |> member "config_template" |> member "version" = `Null)
+    "Task config template endpoint should not expose a legacy version field";
+  assert_true
     (json |> member "config_template" |> member "requiredModelType" |> to_string
     = "NFA")
     "Task config template endpoint should expose the required model type";
   assert_true
     (json |> member "submission_template" |> member "type" |> to_string = "NFA")
     "Task config template endpoint should expose the default submission template"
+
+let test_admin_scope_all_lists_private_and_draft_tasks () =
+  let fixture = make_fixture () in
+  let admin_access = login_admin fixture in
+  let public_task = create_task fixture admin_access ~title:"Public task" () in
+  let draft_task =
+    create_task fixture admin_access ~title:"Draft task" ~status:"DRAFT"
+      ~visibility:"PRIVATE" ()
+  in
+  assert_status `Created public_task;
+  assert_status `Created draft_task;
+  let public_list = request fixture ~meth:`GET ~target:"/api/v1/tasks" () in
+  assert_status `OK public_list;
+  assert_true
+    (List.length (response_json public_list |> member "tasks" |> to_list) = 1)
+    "Public task list should only expose published public tasks";
+  let admin_list =
+    request fixture ~meth:`GET ~target:"/api/v1/tasks?scope=all"
+      ~headers:[ ("Authorization", "Bearer " ^ admin_access) ]
+      ()
+  in
+  assert_status `OK admin_list;
+  assert_true
+    (List.length (response_json admin_list |> member "tasks" |> to_list) = 2)
+    "Admin scope=all should expose drafts and private tasks"
+
+let test_admin_can_update_task_with_explicit_tests_grader () =
+  let fixture = make_fixture () in
+  let admin_access = login_admin fixture in
+  let created_task =
+    create_task fixture admin_access ~title:"Needs review" ~status:"DRAFT"
+      ~visibility:"PRIVATE" ()
+  in
+  assert_status `Created created_task;
+  let task_id = task_id_of_response created_task in
+  let response =
+    request fixture ~meth:`PUT
+      ~target:(Printf.sprintf "/api/v1/tasks/%d" task_id)
+      ~headers:
+        [
+          ("Authorization", "Bearer " ^ admin_access);
+          ("Content-Type", "application/json");
+        ]
+      ~body:
+        (Yojson.Basic.to_string
+           (`Assoc
+             [
+               ("title", `String "Needs review updated");
+               ("description", `String "Updated task description");
+               ("type", `String "MODEL_CONSTRUCTION");
+               ("difficulty", `Int 6);
+               ( "config",
+                 model_construction_config
+                   ~grader:
+                     (`Assoc
+                       [
+                         ("kind", `String "explicit-tests");
+                         ("tests", `List [ `String ""; `String "abba" ]);
+                       ])
+                   () );
+               ("status", `String "PUBLISHED");
+               ("visibility", `String "UNLISTED");
+             ]))
+      ()
+  in
+  assert_status `OK response;
+  let task_json = response_json response |> member "task" in
+  assert_true
+    (task_json |> member "title" |> to_string = "Needs review updated")
+    "Task update should persist the new title";
+  assert_true
+    (task_json |> member "status" |> to_string = "PUBLISHED")
+    "Task update should persist the new status";
+  assert_true
+    (task_json |> member "visibility" |> to_string = "UNLISTED")
+    "Task update should persist the new visibility";
+  assert_true
+    (task_json |> member "config" |> member "grader" |> member "kind"
+   |> to_string
+    = "explicit-tests")
+    "Task update should accept the explicit-tests grader";
+  assert_true
+    (List.length
+       (task_json |> member "config" |> member "grader" |> member "tests"
+      |> to_list)
+    = 2)
+    "Task update should persist the configured explicit tests";
+  assert_true
+    (task_json |> member "published_at" <> `Null)
+    "Publishing an updated draft should set published_at"
 
 let test_task_without_slug_gets_generated_slug_and_can_be_loaded_by_slug () =
   let fixture = make_fixture () in
@@ -246,6 +339,10 @@ let tests : test_case list =
     ( "submission_is_created_pending_and_worker_judges_it",
       test_submission_is_created_pending_and_worker_judges_it );
     ("task_config_template_endpoint", test_task_config_template_endpoint);
+    ( "admin_scope_all_lists_private_and_draft_tasks",
+      test_admin_scope_all_lists_private_and_draft_tasks );
+    ( "admin_can_update_task_with_explicit_tests_grader",
+      test_admin_can_update_task_with_explicit_tests_grader );
     ( "task_without_slug_gets_generated_slug_and_can_be_loaded_by_slug",
       test_task_without_slug_gets_generated_slug_and_can_be_loaded_by_slug );
     ("submissions_scope_mine_vs_all", test_submissions_scope_mine_vs_all);

@@ -140,6 +140,12 @@ let list_public_tasks deps =
              task.status = Domain.Published && task.visibility = Domain.Public)
            tasks)
 
+let list_all_tasks deps =
+  let* listed = deps.repo.list_tasks () in
+  match listed with
+  | Error repo_error -> error (map_repo_error repo_error)
+  | Ok tasks -> ok tasks
+
 let get_task deps ~viewer ~task_id =
   let* task_result = load_task deps task_id in
   match task_result with
@@ -191,6 +197,56 @@ let create_task deps ~admin_context ~title ~slug ~short_description ~description
       match created with
       | Ok task -> ok task
       | Error repo_error -> error (map_repo_error repo_error)
+
+let update_task deps ~admin_context:_ ~task_id ~title ~slug ~short_description
+    ~description ~type_ ?author_id ~difficulty ~config ~status ~visibility ()
+    =
+  let* existing_result = load_task deps task_id in
+  match existing_result with
+  | Error _ as app_error -> Lwt.return app_error
+  | Ok existing_task -> (
+      let slug_result =
+        match slug with
+        | Some _ -> validate_slug slug
+        | None -> Ok existing_task.slug
+      in
+      match
+        ( validate_title title,
+          slug_result,
+          validate_description description,
+          validate_difficulty difficulty,
+          validate_config ~task_type:type_ config )
+      with
+      | Error app_error, _, _, _, _
+      | _, Error app_error, _, _, _
+      | _, _, Error app_error, _, _
+      | _, _, _, Error app_error, _
+      | _, _, _, _, Error app_error ->
+          error app_error
+      | Ok (), Ok normalized_slug, Ok (), Ok (), Ok normalized_config ->
+          let now = deps.clock.now () in
+          let published_at =
+            match status, existing_task.published_at with
+            | Domain.Published, Some value when existing_task.status = Domain.Published ->
+                Some value
+            | Domain.Published, _ -> Some now
+            | _ -> None
+          in
+          let author_id =
+            match author_id with
+            | Some value -> value
+            | None -> existing_task.author_id
+          in
+          let* updated =
+            deps.repo.update_task ~task_id ~title ~slug:normalized_slug
+              ~short_description:(normalize_optional_string short_description)
+              ~description ~type_ ~author_id ~difficulty ~config:normalized_config
+              ~status ~visibility ~published_at ~updated_at:now
+          in
+          match updated with
+          | Ok (Some task) -> ok task
+          | Ok None -> error (App_error.Not_found "Task not found")
+          | Error repo_error -> error (map_repo_error repo_error))
 
 let create_submission deps ~(context : Auth_service.session_context) ~task_id
     ~data =

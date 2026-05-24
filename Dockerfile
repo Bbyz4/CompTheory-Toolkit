@@ -46,6 +46,23 @@ RUN opam install . --deps-only --with-test
 
 FROM base AS dev
 
+RUN sudo apt-get update \
+ && sudo apt-get install -y --no-install-recommends \
+      gnupg \
+ && sudo install -m 0755 -d /etc/apt/keyrings \
+ && curl -fsSL https://download.docker.com/linux/debian/gpg \
+    | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+ && sudo chmod a+r /etc/apt/keyrings/docker.gpg \
+ && . /etc/os-release \
+ && printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian %s stable\n' \
+      "$(dpkg --print-architecture)" "$VERSION_CODENAME" \
+    | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null \
+ && sudo apt-get update \
+ && sudo apt-get install -y --no-install-recommends \
+      docker-ce-cli \
+      docker-compose-plugin \
+ && sudo rm -rf /var/lib/apt/lists/*
+
 COPY --from=node-toolchain /usr/local/ /usr/local/
 
 CMD ["sleep", "infinity"]
