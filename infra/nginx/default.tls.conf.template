@@ -40,6 +40,14 @@ server {
     proxy_pass http://web:8081;
   }
 
+  location ^~ /api/ {
+    proxy_pass http://app:8080;
+  }
+
+  location = /openapi.json {
+    proxy_pass http://app:8080;
+  }
+
   location = /mailpit {
     proxy_pass http://mailpit:8025/mailpit/;
   }
