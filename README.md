@@ -1,4 +1,4 @@
-# CompTheory-Toolkit
+# CompTheory-Toolkit 
 
 OCaml application for auth, tasks and submissions, with:
 - API in Dream
