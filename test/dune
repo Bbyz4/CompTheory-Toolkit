@@ -7,5 +7,12 @@
 
 (rule
  (alias runtest)
- (deps test_main.exe ../scripts/with_system_libs.sh)
- (action (run sh %{dep:../scripts/with_system_libs.sh} ./test_main.exe)))
+ (deps test_main.exe ../scripts/with_system_libs.sh
+   fixtures/mock_identity_faker.py
+   fixtures/mock_task_faker.py)
+ (action
+  (setenv RECOGNITA_FAKE_IDENTITY_SCRIPT
+    %{dep:fixtures/mock_identity_faker.py}
+    (setenv RECOGNITA_FAKE_TASK_SCRIPT
+      %{dep:fixtures/mock_task_faker.py}
+      (run sh %{dep:../scripts/with_system_libs.sh} ./test_main.exe)))))

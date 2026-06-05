@@ -19,6 +19,10 @@ type t = {
   mail_from : string;
   recognita_admin_username : string option;
   recognita_admin_password : string option;
+  recognita_mock_seed : int;
+  recognita_mock_user_count : int;
+  recognita_mock_problem_count : int;
+  recognita_mock_submission_count : int;
   rabbitmq_api_base_url : string;
   rabbitmq_user : string;
   rabbitmq_password : string;
@@ -88,6 +92,14 @@ let load () =
     mail_from = env_string "MAIL_FROM" ~default:"no-reply@recognita.xyz";
     recognita_admin_username = env_nonempty_string "RECOGNITA_ADMIN_USERNAME";
     recognita_admin_password = env_nonempty_string "RECOGNITA_ADMIN_PASSWORD";
+    recognita_mock_seed =
+      env_int "RECOGNITA_BOOTSTRAP_MOCK_SEED" ~default:20260508;
+    recognita_mock_user_count =
+      env_int "RECOGNITA_BOOTSTRAP_MOCK_USERS" ~default:0;
+    recognita_mock_problem_count =
+      env_int "RECOGNITA_BOOTSTRAP_MOCK_PROBLEMS" ~default:0;
+    recognita_mock_submission_count =
+      env_int "RECOGNITA_BOOTSTRAP_MOCK_SUBMISSIONS" ~default:0;
     rabbitmq_api_base_url =
       env_string "RABBITMQ_API_BASE_URL" ~default:"http://rabbitmq:15672";
     rabbitmq_user = env_string "RABBITMQ_USER" ~default:"recognita";

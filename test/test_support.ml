@@ -64,6 +64,10 @@ let base_config ?(auth_rate_limit_max_requests = 10) ?(rate_limit_max_requests =
     mail_from = "no-reply@recognita.xyz";
     recognita_admin_username = None;
     recognita_admin_password = None;
+    recognita_mock_seed = 20260508;
+    recognita_mock_user_count = 0;
+    recognita_mock_problem_count = 0;
+    recognita_mock_submission_count = 0;
     rabbitmq_api_base_url = "http://rabbitmq:15672";
     rabbitmq_user = "recognita";
     rabbitmq_password = "recognita";

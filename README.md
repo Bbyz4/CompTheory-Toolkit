@@ -136,6 +136,12 @@ Submission flow:
 Task creation uses the bootstrap admin configured through
 `RECOGNITA_ADMIN_USERNAME` and `RECOGNITA_ADMIN_PASSWORD`.
 
+Server startup also seeds deterministic mock data when
+`RECOGNITA_BOOTSTRAP_MOCK_*` counts are non-zero. The compose defaults create
+10 mock users, 20 public mock problems and 1000 judged mock submissions. Set
+all three count variables to `0` to disable the seed; submissions require
+mock users and mock problems.
+
 Typical flow:
 
 ```bash
@@ -204,3 +210,7 @@ Common optional secrets/vars:
 - `NGINX_ENABLE_TLS`
 - `POSTGRES_DB`
 - `POSTGRES_USER`
+- `RECOGNITA_BOOTSTRAP_MOCK_SEED`
+- `RECOGNITA_BOOTSTRAP_MOCK_USERS`
+- `RECOGNITA_BOOTSTRAP_MOCK_PROBLEMS`
+- `RECOGNITA_BOOTSTRAP_MOCK_SUBMISSIONS`

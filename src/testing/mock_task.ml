@@ -4,7 +4,7 @@ type spec = {
   difficulty : int;
 }
 
-let faker_script_candidates =
+let faker_script_candidates () =
   let env_override =
     match Sys.getenv_opt "RECOGNITA_FAKE_TASK_SCRIPT" with
     | Some path when String.trim path <> "" -> [ path ]
@@ -13,7 +13,7 @@ let faker_script_candidates =
   env_override @ [ "scripts/mock_task_faker.py"; "/app/scripts/mock_task_faker.py" ]
 
 let faker_script_path () =
-  match List.find_opt Sys.file_exists faker_script_candidates with
+  match List.find_opt Sys.file_exists (faker_script_candidates ()) with
   | Some path -> path
   | None ->
       failwith

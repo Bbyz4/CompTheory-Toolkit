@@ -7,7 +7,7 @@ type person = {
   client_id : string;
 }
 
-let faker_script_candidates =
+let faker_script_candidates () =
   let env_override =
     match Sys.getenv_opt "RECOGNITA_FAKE_IDENTITY_SCRIPT" with
     | Some path when String.trim path <> "" -> [ path ]
@@ -21,7 +21,7 @@ let faker_script_candidates =
   ]
 
 let faker_script_path () =
-  match List.find_opt Sys.file_exists faker_script_candidates with
+  match List.find_opt Sys.file_exists (faker_script_candidates ()) with
   | Some path -> path
   | None ->
       failwith
