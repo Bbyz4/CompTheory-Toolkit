@@ -16,7 +16,10 @@ public class TaskPrefabBehaviour : MonoBehaviour
 
     public void FillData(TaskDescriptor taskDesc, TaskDetailsViewPanelBehaviour detailPanel)
     {
-        taskTitleText.text = taskDesc.taskName;
+        taskTitleText.text = taskDesc.taskName.Length > 15
+            ? taskDesc.taskName.Substring(0, 15) + "..."
+            : taskDesc.taskName;
+
         taskOpenButton.onClick.RemoveAllListeners();
 
         taskOpenButton.onClick.AddListener(() =>

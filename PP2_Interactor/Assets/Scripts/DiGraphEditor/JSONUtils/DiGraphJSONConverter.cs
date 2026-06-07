@@ -177,16 +177,54 @@ public class DiGraphJSONConverter : MonoBehaviour
 
         Dictionary<string, int> nameToID = new Dictionary<string, int>();
 
-        foreach(var placement in jsonForm.nodePlacements)
+        bool hasPlacements =
+            jsonForm.nodePlacements != null &&
+            jsonForm.nodePlacements.Count > 0;
+
+        if(hasPlacements)
         {
-            bool isStarting = (placement.nodeName == jsonForm.model.startState);
-            bool isAccepting = jsonForm.model.acceptStates.Contains(placement.nodeName);
+            foreach(var placement in jsonForm.nodePlacements)
+            {
+                bool isStarting = (placement.nodeName == jsonForm.model.startState);
+                bool isAccepting = jsonForm.model.acceptStates.Contains(placement.nodeName);
 
-            Vector2 position = new Vector2(placement.posX, placement.posY);
+                Vector2 position = new Vector2(placement.posX, placement.posY);
 
-            int newID = manager.AddNode(position, placement.nodeName, isStarting, isAccepting);
+                int newID = manager.AddNode(position, placement.nodeName, isStarting, isAccepting);
 
-            nameToID[placement.nodeName] = newID;
+                nameToID[placement.nodeName] = newID;
+            }
+        }
+        else
+        {
+            float radius = 4f;
+            int count = jsonForm.model.states.Count;
+
+            for(int i = 0; i < count; i++)
+            {
+                string stateName = jsonForm.model.states[i];
+
+                float angle =
+                    (Mathf.PI * 2f * i) / count;
+
+                Vector2 position = new Vector2(
+                    Mathf.Cos(angle) * radius,
+                    Mathf.Sin(angle) * radius);
+
+                bool isStarting =
+                    stateName == jsonForm.model.startState;
+
+                bool isAccepting =
+                    jsonForm.model.acceptStates.Contains(stateName);
+
+                int newID = manager.AddNode(
+                    position,
+                    stateName,
+                    isStarting,
+                    isAccepting);
+
+                nameToID[stateName] = newID;
+            }
         }
 
         foreach(var transition in jsonForm.model.transitions)
@@ -211,16 +249,54 @@ public class DiGraphJSONConverter : MonoBehaviour
 
         Dictionary<string, int> nameToID = new Dictionary<string, int>();
 
-        foreach(var placement in jsonForm.nodePlacements)
+        bool hasPlacements =
+            jsonForm.nodePlacements != null &&
+            jsonForm.nodePlacements.Count > 0;
+
+        if(hasPlacements)
         {
-            bool isStarting = jsonForm.model.startStates.Contains(placement.nodeName);
-            bool isAccepting = jsonForm.model.acceptStates.Contains(placement.nodeName);
+            foreach(var placement in jsonForm.nodePlacements)
+            {
+                bool isStarting = jsonForm.model.startStates.Contains(placement.nodeName);
+                bool isAccepting = jsonForm.model.acceptStates.Contains(placement.nodeName);
 
-            Vector2 position = new Vector2(placement.posX, placement.posY);
+                Vector2 position = new Vector2(placement.posX, placement.posY);
 
-            int newID = manager.AddNode(position, placement.nodeName, isStarting, isAccepting);
+                int newID = manager.AddNode(position, placement.nodeName, isStarting, isAccepting);
 
-            nameToID[placement.nodeName] = newID;
+                nameToID[placement.nodeName] = newID;
+            }
+        }
+        else
+        {
+            float radius = 4f;
+            int count = jsonForm.model.states.Count;
+
+            for(int i = 0; i < count; i++)
+            {
+                string stateName = jsonForm.model.states[i];
+
+                float angle =
+                    (Mathf.PI * 2f * i) / count;
+
+                Vector2 position = new Vector2(
+                    Mathf.Cos(angle) * radius,
+                    Mathf.Sin(angle) * radius);
+
+                bool isStarting =
+                    jsonForm.model.startStates.Contains(stateName);
+
+                bool isAccepting =
+                    jsonForm.model.acceptStates.Contains(stateName);
+
+                int newID = manager.AddNode(
+                    position,
+                    stateName,
+                    isStarting,
+                    isAccepting);
+
+                nameToID[stateName] = newID;
+            }
         }
 
         foreach(var transition in jsonForm.model.transitions)

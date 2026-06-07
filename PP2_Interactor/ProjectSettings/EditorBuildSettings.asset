@@ -14,6 +14,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/CFGEditor.unity
     guid: bbee7836c3e97ca4288c1c3d6d15fd12
+  - enabled: 1
+    path: Assets/Scenes/TMEditor.unity
+    guid: 208f9d688aabd1e4991dc2f07454ca32
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   m_UseUCBPForAssetBundles: 0

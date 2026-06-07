@@ -13,6 +13,11 @@ TagManager:
   - CFGFreeRunManager
   - CFGManager
   - CFGProductionListManager
+  - TMManager
+  - TMFreeRunManager
+  - TMPopupManager
+  - TMInputManager
+  - TMTransitionListManager
   layers:
   - Default
   - TransparentFX

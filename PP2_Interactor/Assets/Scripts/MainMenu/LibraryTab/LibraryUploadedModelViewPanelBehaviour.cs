@@ -39,7 +39,7 @@ public class LibraryUploadedModelViewPanelBehaviour : MonoBehaviour
         editModelButton.onClick.RemoveAllListeners();
         editModelButton.onClick.AddListener(() =>
         {
-            string JSONModelForm = LibraryModelObtainer.LoadJSONFileForModel(modelDesc.internalID);
+            string JSONModelForm = LibraryModelObtainer.LoadJSONFileForModel(modelDesc);
             ModelData.preopenFromJSON = true;
             ModelData.JSONFile = JSONModelForm;
 
@@ -52,6 +52,14 @@ public class LibraryUploadedModelViewPanelBehaviour : MonoBehaviour
                 case "NFA":
                     ModelData.modelType = ModelData.ModelType.NFA;
                     SceneManager.LoadScene("DiGraphEditor");
+                    break;
+                case "CFG":
+                    ModelData.modelType = ModelData.ModelType.CFG;
+                    SceneManager.LoadScene("CFGEditor");
+                    break;
+                case "TM":
+                    ModelData.modelType = ModelData.ModelType.TM;
+                    SceneManager.LoadScene("TMEditor");
                     break;
                 default:
                     Debug.LogError("Automaton type not supported yet");
