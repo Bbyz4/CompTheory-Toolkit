@@ -1,9 +1,11 @@
 import {
-  createModelConstructionConfig,
   ModelConstructionTaskTypePanel,
+} from './modelConstructionTaskType';
+import {
+  createModelConstructionConfig,
   MODEL_CONSTRUCTION_TASK_TYPE,
   normalizeModelConstructionConfig,
-} from './modelConstructionTaskType';
+} from './modelConstructionTaskConfig';
 
 export const taskTypePanels = {
   [MODEL_CONSTRUCTION_TASK_TYPE]: {
@@ -20,4 +22,3 @@ export const taskTypeOptions = Object.entries(taskTypePanels).map(
     label: panel.label,
   }),
 );
-

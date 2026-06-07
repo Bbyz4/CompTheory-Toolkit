@@ -50,23 +50,48 @@ const Students = () => {
   const [error, setError] = React.useState('');
   const navigate = useNavigate();
 
-  const loadUsers = React.useCallback(async () => {
+  const applyUsers = React.useCallback((nextUsers) => {
+    setUsers(nextUsers);
+    setError('');
+  }, []);
+
+  const reloadUsers = React.useCallback(async () => {
     setLoading(true);
 
     try {
       const nextUsers = await getUsers();
-      setUsers(nextUsers);
-      setError('');
+      applyUsers(nextUsers);
     } catch (nextError) {
       setError(nextError.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyUsers]);
 
   React.useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    let isCurrent = true;
+
+    getUsers()
+      .then((nextUsers) => {
+        if (isCurrent) {
+          applyUsers(nextUsers);
+        }
+      })
+      .catch((nextError) => {
+        if (isCurrent) {
+          setError(nextError.message);
+        }
+      })
+      .finally(() => {
+        if (isCurrent) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [applyUsers]);
 
   const handleBanToggle = async (user) => {
     setPendingUserId(user.id);
@@ -78,7 +103,7 @@ const Students = () => {
         await banUser(user.id);
       }
 
-      await loadUsers();
+      await reloadUsers();
     } catch (nextError) {
       setError(nextError.message);
     } finally {

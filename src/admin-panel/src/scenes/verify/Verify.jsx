@@ -4,20 +4,17 @@ import { useLocation } from 'react-router-dom';
 
 const Verify = () => {
   const location = useLocation();
+  const token = React.useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('token');
+  }, [location.search]);
   const [state, setState] = React.useState({
     status: 'loading',
     message: 'Verifying your email address...',
   });
 
   React.useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const token = params.get('token');
-
     if (!token) {
-      setState({
-        status: 'error',
-        message: 'Verification token is missing.',
-      });
       return;
     }
 
@@ -51,18 +48,25 @@ const Verify = () => {
     };
 
     verify();
-  }, [location.search]);
+  }, [token]);
+
+  const displayState = token
+    ? state
+    : {
+        status: 'error',
+        message: 'Verification token is missing.',
+      };
 
   return (
     <div className="verify">
       <h1>Verify your email</h1>
       <Paper elevation={0} className="verify-panel">
-        {state.status === 'loading' ? <CircularProgress size={24} /> : null}
-        {state.status === 'success' ? (
-          <Alert severity="success">{state.message}</Alert>
+        {displayState.status === 'loading' ? <CircularProgress size={24} /> : null}
+        {displayState.status === 'success' ? (
+          <Alert severity="success">{displayState.message}</Alert>
         ) : null}
-        {state.status === 'error' ? (
-          <Alert severity="error">{state.message}</Alert>
+        {displayState.status === 'error' ? (
+          <Alert severity="error">{displayState.message}</Alert>
         ) : null}
         <Typography sx={{ mt: 2, color: 'var(--text)' }}>
           You can return to the dashboard after the verification request completes.

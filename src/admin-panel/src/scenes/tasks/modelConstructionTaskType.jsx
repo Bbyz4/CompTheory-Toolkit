@@ -1,9 +1,7 @@
 import AddIcon from '@mui/icons-material/Add';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import { Box, IconButton, MenuItem, TextField, Tooltip, Typography } from '@mui/material';
-import React from 'react';
-
-export const MODEL_CONSTRUCTION_TASK_TYPE = 'MODEL_CONSTRUCTION';
+import { normalizeModelConstructionConfig } from './modelConstructionTaskConfig';
 
 const modelTypeOptions = [
   { value: 'NFA', label: 'NFA' },
@@ -27,36 +25,6 @@ const normalizeTests = (tests) => {
     .filter((value) => typeof value === 'string')
     .map((value) => value);
 };
-
-export const normalizeModelConstructionConfig = (config = {}) => {
-  const requiredModelType =
-    typeof config?.requiredModelType === 'string' &&
-    config.requiredModelType.trim()
-      ? config.requiredModelType
-      : 'NFA';
-  const graderKind =
-    config?.grader?.kind === 'explicit-tests' ? 'explicit-tests' : 'mock';
-
-  if (graderKind === 'explicit-tests') {
-    return {
-      requiredModelType,
-      grader: {
-        kind: 'explicit-tests',
-        tests: normalizeTests(config?.grader?.tests),
-      },
-    };
-  }
-
-  return {
-    requiredModelType,
-    grader: {
-      kind: 'mock',
-    },
-  };
-};
-
-export const createModelConstructionConfig = (template) =>
-  normalizeModelConstructionConfig(template);
 
 const selectMenuProps = {
   MenuProps: {
@@ -231,7 +199,7 @@ export const ModelConstructionTaskTypePanel = ({ value, onChange }) => {
                     onClick={() => handleRemoveTest(index)}
                     sx={{ color: 'var(--text)' }}
                   >
-                    <DeleteOutlineIcon fontSize="small" />
+                    <DeleteOutlinedIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
               </Box>
