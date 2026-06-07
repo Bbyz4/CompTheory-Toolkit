@@ -2,6 +2,10 @@ open Yojson.Basic.Util
 
 type validation_error = string
 
+type model_construction_grader =
+  | Mock
+  | Explicit_tests of string list
+
 let ( let* ) result next = Result.bind result next
 
 let error field message =
@@ -97,6 +101,33 @@ module Model_construction = struct
     | `String value -> Domain.model_type_of_string value
     | _ -> None
 
+  let grader config =
+    match config |> member "grader" with
+    | `Assoc _ as grader_json -> (
+        match grader_json |> member "kind" with
+        | `String "mock" -> Ok Mock
+        | `String "explicit-tests" -> (
+            match grader_json |> member "tests" with
+            | `List tests ->
+                let rec loop index acc = function
+                  | [] -> Ok (Explicit_tests (List.rev acc))
+                  | `String word :: rest -> loop (index + 1) (word :: acc) rest
+                  | _ :: _ ->
+                      Error
+                        (error
+                           (Printf.sprintf "config.grader.tests[%d]" index)
+                           "must be a string")
+                in
+                loop 0 [] tests
+            | `Null -> Ok (Explicit_tests [])
+            | _ -> Error (error "config.grader.tests" "must be an array"))
+        | `String _ ->
+            Error
+              (error "config.grader.kind"
+                 "must be equal to \"mock\" or \"explicit-tests\"")
+        | _ -> Error (error "config.grader.kind" "must be a string"))
+    | _ -> Error (error "config.grader" "must be a JSON object")
+
   let submission_template config =
     match required_model_type config with
     | Some model_type -> Model_json.template_json model_type
@@ -130,6 +161,8 @@ let submission_example_json ~task_type ~config =
 let validate_task_config ~task_type json =
   match task_type with
   | Domain.Model_construction -> Model_construction.validate_config json
+
+let model_construction_grader config = Model_construction.grader config
 
 let validate_submission_data ~task_type ~config json =
   match task_type with

@@ -170,5 +170,3 @@ CREATE INDEX IF NOT EXISTS submissions_created_at_idx
 CREATE INDEX IF NOT EXISTS submissions_pending_idx
   ON submissions (created_at)
   WHERE verdict = 'PENDING';
-
-TRUNCATE TABLE submissions;

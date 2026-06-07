@@ -2,7 +2,6 @@ import {
   Alert,
   Button,
   CircularProgress,
-  Paper,
   Table,
   TableBody,
   TableContainer,
@@ -12,20 +11,25 @@ import {
 import { styled } from '@mui/material/styles';
 import TableCell, { tableCellClasses } from '@mui/material/TableCell';
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import StatusBadge from '../../components/StatusBadge';
 import { formatDateTime } from '../../services/formatters';
 import { banUser, getUsers, unbanUser } from '../../services/userService';
 
 const StyledTableCell = styled(TableCell)(() => ({
   [`&.${tableCellClasses.head}`]: {
-    backgroundColor: 'var(--accent-dark)',
-    color: 'var(--accent-contrast)',
+    backgroundColor: 'var(--box-light)',
+    color: 'var(--text-secondary)',
     borderBottom: '1px solid var(--border)',
-    fontWeight: 'bold',
+    fontSize: '12px',
+    fontWeight: 800,
+    textTransform: 'uppercase',
   },
   [`&.${tableCellClasses.body}`]: {
     color: 'var(--text-h)',
     backgroundColor: 'var(--box)',
     borderBottom: '1px solid var(--border)',
+    fontSize: '14px',
   },
 }));
 
@@ -44,6 +48,7 @@ const Students = () => {
   const [loading, setLoading] = React.useState(true);
   const [pendingUserId, setPendingUserId] = React.useState(null);
   const [error, setError] = React.useState('');
+  const navigate = useNavigate();
 
   const loadUsers = React.useCallback(async () => {
     setLoading(true);
@@ -86,17 +91,8 @@ const Students = () => {
       <h1>Students</h1>
       {error ? <Alert severity="error">{error}</Alert> : null}
 
-      <TableContainer
-        component={Paper}
-        sx={{
-          backgroundColor: 'var(--box)',
-          boxShadow: 'none',
-          border: '1px solid var(--border)',
-          borderRadius: '12px',
-          marginTop: 2,
-        }}
-      >
-        <Table aria-label="users table">
+      <TableContainer className="admin-table-container">
+        <Table aria-label="users table" className="admin-table">
           <TableHead>
             <TableRow>
               <StyledTableCell>Username</StyledTableCell>
@@ -121,20 +117,32 @@ const Students = () => {
               </StyledTableRow>
             ) : (
               users.map((user) => (
-                <StyledTableRow key={user.id}>
+                <StyledTableRow
+                  key={user.id}
+                  hover
+                  onClick={() => navigate(`/students/${user.id}`)}
+                  sx={{ cursor: 'pointer' }}
+                >
                   <StyledTableCell>{user.username}</StyledTableCell>
                   <StyledTableCell>{user.email}</StyledTableCell>
-                  <StyledTableCell>{user.role}</StyledTableCell>
-                  <StyledTableCell>{user.verified ? 'Yes' : 'No'}</StyledTableCell>
                   <StyledTableCell>
-                    {user.isBanned ? user.banReason || 'Banned' : 'Active'}
+                    <StatusBadge value={user.role} />
+                  </StyledTableCell>
+                  <StyledTableCell>
+                    <StatusBadge value={user.verified ? 'Yes' : 'No'} />
+                  </StyledTableCell>
+                  <StyledTableCell>
+                    <StatusBadge value={user.isBanned ? 'Banned' : 'Active'} />
                   </StyledTableCell>
                   <StyledTableCell>{formatDateTime(user.createdAt)}</StyledTableCell>
                   <StyledTableCell align="right">
                     <Button
                       variant="outlined"
                       color={user.isBanned ? 'success' : 'error'}
-                      onClick={() => handleBanToggle(user)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleBanToggle(user);
+                      }}
                       disabled={pendingUserId === user.id}
                     >
                       {pendingUserId === user.id ? (

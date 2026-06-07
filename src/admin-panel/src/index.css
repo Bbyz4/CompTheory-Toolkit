@@ -1,31 +1,49 @@
 :root,
 :root[data-theme='paper'] {
-  --text: #5f5864;
-  --text-h: #221d28;
-  --text-secondary: #7c7483;
-  --bg: #f6f1eb;
-  --main: #efe7dd;
-  --box: #fffaf4;
-  --box-light: #f5ede3;
-  --border: #d9cdbf;
-  --accent: #bf5a36;
-  --accent-dark: #7c3320;
-  --accent-contrast: #fffaf4;
+  --text: #5b6472;
+  --text-h: #111827;
+  --text-secondary: #6b7280;
+  --bg: #f8fafc;
+  --main: #eef2f7;
+  --box: #ffffff;
+  --box-light: #f4f7fb;
+  --border: #d7dde7;
+  --accent: #2563eb;
+  --accent-dark: #1e40af;
+  --accent-soft: #dbeafe;
+  --accent-contrast: #ffffff;
+  --success: #14804a;
+  --success-soft: #dcfce7;
+  --warning: #a16207;
+  --warning-soft: #fef3c7;
+  --danger: #b42318;
+  --danger-soft: #fee2e2;
+  --neutral-soft: #eef2f7;
+  --shadow-soft: 0 18px 42px rgba(15, 23, 42, 0.08);
   --sans: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
 }
 
 :root[data-theme='fjord'] {
-  --text: #5d6976;
-  --text-h: #16212d;
-  --text-secondary: #758292;
-  --bg: #eaf0f4;
-  --main: #dfe7ed;
-  --box: #f8fbfd;
-  --box-light: #edf3f7;
-  --border: #c6d2dc;
-  --accent: #2e6f95;
-  --accent-dark: #17445f;
-  --accent-contrast: #f8fbfd;
+  --text: #596675;
+  --text-h: #101828;
+  --text-secondary: #667085;
+  --bg: #f8fafc;
+  --main: #edf2f8;
+  --box: #ffffff;
+  --box-light: #f3f7fb;
+  --border: #d5deea;
+  --accent: #2563eb;
+  --accent-dark: #1d4ed8;
+  --accent-soft: #dbeafe;
+  --accent-contrast: #ffffff;
+  --success: #15803d;
+  --success-soft: #dcfce7;
+  --warning: #a16207;
+  --warning-soft: #fef3c7;
+  --danger: #b42318;
+  --danger-soft: #fee2e2;
+  --neutral-soft: #eef2f7;
+  --shadow-soft: 0 18px 42px rgba(15, 23, 42, 0.08);
 }
 
 :root[data-theme='grove'] {
@@ -39,7 +57,16 @@
   --border: #cdd7ca;
   --accent: #4d7a5a;
   --accent-dark: #2d5238;
+  --accent-soft: #dbeadb;
   --accent-contrast: #f9fcf6;
+  --success: #2d6a42;
+  --success-soft: #e3f2e5;
+  --warning: #8a6200;
+  --warning-soft: #fff1c2;
+  --danger: #a33a2a;
+  --danger-soft: #f9ded8;
+  --neutral-soft: #eef4e9;
+  --shadow-soft: 0 18px 42px rgba(31, 43, 34, 0.08);
 }
 
 html {
@@ -55,9 +82,11 @@ html {
 body {
   margin: 0;
   font-family: var(--sans);
-  background-color: var(--bg);
+  background-color: var(--main);
   color: var(--text);
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
 }
 
 #root {
@@ -80,6 +109,7 @@ h1,
 h2,
 h3 {
   color: var(--text-h);
+  letter-spacing: 0;
 }
 
 ::-webkit-scrollbar {

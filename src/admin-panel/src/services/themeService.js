@@ -1,14 +1,14 @@
 const THEME_STORAGE_KEY = 'recognita-admin-theme';
-const DEFAULT_THEME = 'paper';
+const DEFAULT_THEME = 'fjord';
 
 export const themeOptions = [
   {
     id: 'paper',
-    label: 'Paper',
+    label: 'Clean',
   },
   {
     id: 'fjord',
-    label: 'Fjord',
+    label: 'SaaS',
   },
   {
     id: 'grove',

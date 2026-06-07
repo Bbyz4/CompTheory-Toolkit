@@ -5,22 +5,13 @@ import { getTasks } from '../../services/taskService';
 import { getUsers } from '../../services/userService';
 
 const StatCard = ({ label, value }) => (
-  <Paper
-    elevation={0}
-    sx={{
-      p: 3,
-      borderRadius: '12px',
-      border: '1px solid var(--border)',
-      backgroundColor: 'var(--box)',
-      minWidth: 220,
-    }}
-  >
-    <Typography variant="overline" sx={{ color: 'var(--text)' }}>
+  <Paper elevation={0} className="dashboard-stat">
+    <Typography className="dashboard-stat-label">
       {label}
     </Typography>
-    <Typography variant="h3" sx={{ color: 'var(--text-h)' }}>
+    <div className="dashboard-stat-value">
       {value}
-    </Typography>
+    </div>
   </Paper>
 );
 
@@ -68,7 +59,7 @@ const Dashboard = () => {
       {loading ? (
         <CircularProgress size={28} />
       ) : (
-        <Box display="flex" gap={2} flexWrap="wrap">
+        <Box className="dashboard-grid">
           <StatCard label="Tasks" value={stats.tasks} />
           <StatCard label="Users" value={stats.users} />
           <StatCard label="Submissions" value={stats.submissions} />

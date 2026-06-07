@@ -16,24 +16,6 @@ let map_repo_error = function
   | Repository.Not_found message -> message
   | Repository.Storage message -> message
 
-let random_verdict () =
-  match Random.int 4 with
-  | 0 -> Domain.Accepted
-  | 1 -> Domain.Rejected
-  | 2 -> Domain.Invalid_format
-  | _ -> Domain.Internal_error
-
-let mock_run_data clock submission_id verdict delay_seconds =
-  `Assoc
-    [
-      ("worker", `String "mock-rabbitmq-http");
-      ("submission_id", `Int submission_id);
-      ("strategy", `String "random");
-      ("delay_seconds", `Float delay_seconds);
-      ("verdict", `String (Domain.submission_verdict_to_string verdict));
-      ("judged_at", `String (Util.iso8601_of_unix_time (clock.Clock.now ())));
-    ]
-
 let sample_poisson_seconds ~mean =
   if mean <= 0.0 then
     0.
@@ -47,6 +29,16 @@ let sample_poisson_seconds ~mean =
     in
     loop 0 1.0
 
+let persist_grade deps submission grade judged_at =
+  let* updated =
+    deps.repo.update_submission_result ~submission_id:submission.Domain.id
+      ~verdict:grade.Submission_grader.verdict
+      ~run_data:(Some grade.run_data) ~judged_at
+  in
+  match updated with
+  | Ok _ -> ok ()
+  | Error repo_error -> error (map_repo_error repo_error)
+
 let judge_submission deps submission_id =
   let* found = deps.repo.find_submission_by_id submission_id in
   match found with
@@ -58,18 +50,24 @@ let judge_submission deps submission_id =
       else
         let delay_seconds = deps.judging_delay_seconds () in
         let* () = Lwt_unix.sleep delay_seconds in
-        let verdict = random_verdict () in
         let judged_at = deps.clock.now () in
-        let run_data =
-          mock_run_data deps.clock submission.id verdict delay_seconds
-        in
-        let* updated =
-          deps.repo.update_submission_result ~submission_id:submission.id
-            ~verdict ~run_data:(Some run_data) ~judged_at
-        in
-        match updated with
-        | Ok _ -> ok ()
-        | Error repo_error -> error (map_repo_error repo_error)
+        let* task_result = deps.repo.find_task_by_id submission.task_id in
+        begin
+          match task_result with
+          | Error repo_error -> error (map_repo_error repo_error)
+          | Ok None ->
+              let grade =
+                Submission_grader.missing_task_grade ~submission ~delay_seconds
+                  ~judged_at
+              in
+              persist_grade deps submission grade judged_at
+          | Ok (Some task) ->
+              let grade =
+                Submission_grader.grade ~task ~submission ~delay_seconds
+                  ~judged_at
+              in
+              persist_grade deps submission grade judged_at
+        end
 
 let process_next deps =
   let* pulled = deps.queue.pull_submission () in

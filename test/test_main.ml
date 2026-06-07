@@ -5,6 +5,7 @@ let tests : test_case list =
     [
       Test_auth.tests;
       Test_tasks.tests;
+      Test_primitives.tests;
       Nfa_validation_tests.tests;
       Cfg_validation_tests.tests;
       Test_web.tests;

@@ -1,4 +1,6 @@
-import { Box, IconButton, MenuItem, TextField, Typography } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import { Box, IconButton, MenuItem, TextField, Tooltip, Typography } from '@mui/material';
 import React from 'react';
 
 export const MODEL_CONSTRUCTION_TASK_TYPE = 'MODEL_CONSTRUCTION';
@@ -197,15 +199,15 @@ export const ModelConstructionTaskTypePanel = ({ value, onChange }) => {
             <Typography variant="body2" sx={{ color: 'var(--text)' }}>
               Explicit tests
             </Typography>
-            <IconButton
-              size="small"
-              onClick={handleAddTest}
-              sx={{ color: 'var(--accent)' }}
-            >
-              <Typography component="span" sx={{ fontSize: '1rem', lineHeight: 1 }}>
-                +
-              </Typography>
-            </IconButton>
+            <Tooltip title="Add test">
+              <IconButton
+                size="small"
+                onClick={handleAddTest}
+                sx={{ color: 'var(--accent)' }}
+              >
+                <AddIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </Box>
 
           {tests.length === 0 ? (
@@ -223,15 +225,15 @@ export const ModelConstructionTaskTypePanel = ({ value, onChange }) => {
                   className="custom-textfield"
                   fullWidth
                 />
-                <IconButton
-                  size="small"
-                  onClick={() => handleRemoveTest(index)}
-                  sx={{ color: 'var(--text)' }}
-                >
-                  <Typography component="span" sx={{ fontSize: '1rem', lineHeight: 1 }}>
-                    ×
-                  </Typography>
-                </IconButton>
+                <Tooltip title="Remove test">
+                  <IconButton
+                    size="small"
+                    onClick={() => handleRemoveTest(index)}
+                    sx={{ color: 'var(--text)' }}
+                  >
+                    <DeleteOutlineIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
               </Box>
             ))
           )}

@@ -1,6 +1,26 @@
 open Yojson.Basic.Util
 open Test_support
 
+let nfa_transition from_state to_state symbol =
+  `Assoc
+    [
+      ("from", `String from_state);
+      ("to", `String to_state);
+      ( "symbol",
+        match symbol with Some value -> `String value | None -> `Null );
+    ]
+
+let process_one_submission fixture =
+  let worker_deps : Toolkit.Submission_worker.deps =
+    {
+      repo = fixture.repo;
+      queue = fixture.submission_queue;
+      clock = fixture.clock;
+      judging_delay_seconds = (fun () -> 0.);
+    }
+  in
+  Lwt_main.run (Toolkit.Submission_worker.process_next worker_deps) |> unwrap_ok
+
 let test_delete_user_cascades_owned_tasks_and_submissions () =
   let fixture = make_fixture () in
   let admin_access = login_admin fixture in
@@ -113,18 +133,7 @@ let test_submission_is_created_pending_and_worker_judges_it () =
     (created_submission_json |> member "verdict" |> to_string = "PENDING")
     "New submission should start as pending";
   let submission_id = submission_id_of_response created_submission in
-  let worker_deps : Toolkit.Submission_worker.deps =
-    {
-      repo = fixture.repo;
-      queue = fixture.submission_queue;
-      clock = fixture.clock;
-      judging_delay_seconds = (fun () -> 0.);
-    }
-  in
-  let processed =
-    Lwt_main.run (Toolkit.Submission_worker.process_next worker_deps)
-    |> unwrap_ok
-  in
+  let processed = process_one_submission fixture in
   assert_true processed "Worker should consume one queued submission";
   let stored_submission =
     Lwt_main.run (fixture.repo.find_submission_by_id submission_id)
@@ -137,8 +146,131 @@ let test_submission_is_created_pending_and_worker_judges_it () =
         "Worker should replace the pending verdict with a mock result";
       assert_true
         (submission.run_data <> None)
-        "Worker should persist mock run_data"
+        "Worker should persist mock run_data";
+      begin
+        match submission.run_data with
+        | Some run_data ->
+            assert_true
+              (run_data |> member "worker" |> to_string = "mock-rabbitmq-http")
+              "Mock task should be graded by the mock worker"
+        | None -> fail "Worker should persist mock run_data"
+      end
   | None -> fail "Stored submission should still be queryable"
+
+let submit_nfa fixture access_token task_id data =
+  request fixture ~meth:`POST
+    ~target:(Printf.sprintf "/api/v1/tasks/%d/submissions" task_id)
+    ~headers:
+      [
+        ("Authorization", "Bearer " ^ access_token);
+        ("Content-Type", "application/json");
+      ]
+    ~body:(Yojson.Basic.to_string (`Assoc [ ("data", data) ]))
+    ()
+
+let explicit_tests_config tests =
+  model_construction_config
+    ~grader:
+      (`Assoc
+        [
+          ("kind", `String "explicit-tests");
+          ("tests", `List (List.map (fun word -> `String word) tests));
+        ])
+    ()
+
+let a_star_nfa () =
+  valid_nfa_submission_data
+    ~states:[ "q0" ]
+    ~input_alphabet:[ "a" ]
+    ~transitions:[ nfa_transition "q0" "q0" (Some "a") ]
+    ~start_states:[ "q0" ] ~accept_states:[ "q0" ] ()
+
+let test_explicit_tests_worker_accepts_when_all_words_are_accepted () =
+  let fixture = make_fixture () in
+  let admin_access = login_admin fixture in
+  let created_task =
+    create_task fixture admin_access
+      ~config:(explicit_tests_config [ ""; "a"; "aa" ])
+      ()
+  in
+  assert_status `Created created_task;
+  let task_id = task_id_of_response created_task in
+  let registered =
+    register fixture "explicitok" "explicitok@example.com" "password123"
+  in
+  assert_status `Created registered;
+  let solver_access = token_of_response registered "access_token" in
+  let created_submission =
+    submit_nfa fixture solver_access task_id (a_star_nfa ())
+  in
+  assert_status `Created created_submission;
+  let submission_id = submission_id_of_response created_submission in
+  assert_true (process_one_submission fixture) "Worker should process submission";
+  let stored_submission =
+    Lwt_main.run (fixture.repo.find_submission_by_id submission_id)
+    |> unwrap_repo_ok
+  in
+  match stored_submission with
+  | None -> fail "Stored submission should still be queryable"
+  | Some submission -> (
+      assert_true
+        (submission.verdict = Toolkit.Domain.Accepted)
+        "Explicit tests should accept when every word is accepted";
+      match submission.run_data with
+      | None -> fail "Explicit test worker should persist run_data"
+      | Some run_data ->
+          assert_true
+            (run_data |> member "worker" |> to_string = "explicit-tests")
+            "Explicit test task should be graded by the explicit-tests worker";
+          assert_true
+            (run_data |> member "strategy" |> to_string = "nfa-acceptance")
+            "Explicit test worker should use the NFA acceptance primitive";
+          assert_true
+            (List.length (run_data |> member "tests" |> to_list) = 3)
+            "Explicit test run_data should include each configured test")
+
+let test_explicit_tests_worker_rejects_when_a_word_is_rejected () =
+  let fixture = make_fixture () in
+  let admin_access = login_admin fixture in
+  let created_task =
+    create_task fixture admin_access
+      ~config:(explicit_tests_config [ "a"; "b" ])
+      ()
+  in
+  assert_status `Created created_task;
+  let task_id = task_id_of_response created_task in
+  let registered =
+    register fixture "explicitbad" "explicitbad@example.com" "password123"
+  in
+  assert_status `Created registered;
+  let solver_access = token_of_response registered "access_token" in
+  let created_submission =
+    submit_nfa fixture solver_access task_id (a_star_nfa ())
+  in
+  assert_status `Created created_submission;
+  let submission_id = submission_id_of_response created_submission in
+  assert_true (process_one_submission fixture) "Worker should process submission";
+  let stored_submission =
+    Lwt_main.run (fixture.repo.find_submission_by_id submission_id)
+    |> unwrap_repo_ok
+  in
+  match stored_submission with
+  | None -> fail "Stored submission should still be queryable"
+  | Some submission -> (
+      assert_true
+        (submission.verdict = Toolkit.Domain.Rejected)
+        "Explicit tests should reject when any word is rejected";
+      match submission.run_data with
+      | None -> fail "Explicit test worker should persist run_data"
+      | Some run_data ->
+          let tests = run_data |> member "tests" |> to_list in
+          assert_true
+            (List.exists
+               (fun test_json ->
+                 test_json |> member "word" |> to_string = "b"
+                 && not (test_json |> member "accepted" |> to_bool))
+               tests)
+            "Explicit test run_data should record the rejected word")
 
 let test_task_config_template_endpoint () =
   let fixture = make_fixture () in
@@ -338,6 +470,10 @@ let tests : test_case list =
       test_admin_creates_task_and_public_list_exposes_it );
     ( "submission_is_created_pending_and_worker_judges_it",
       test_submission_is_created_pending_and_worker_judges_it );
+    ( "explicit_tests_worker_accepts_when_all_words_are_accepted",
+      test_explicit_tests_worker_accepts_when_all_words_are_accepted );
+    ( "explicit_tests_worker_rejects_when_a_word_is_rejected",
+      test_explicit_tests_worker_rejects_when_a_word_is_rejected );
     ("task_config_template_endpoint", test_task_config_template_endpoint);
     ( "admin_scope_all_lists_private_and_draft_tasks",
       test_admin_scope_all_lists_private_and_draft_tasks );

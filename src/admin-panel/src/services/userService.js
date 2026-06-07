@@ -17,6 +17,11 @@ export const getUsers = async () => {
   return (payload?.users ?? []).map(mapUser);
 };
 
+export const getUser = async (userId) => {
+  const users = await getUsers();
+  return users.find((user) => user.id === Number(userId)) ?? null;
+};
+
 export const banUser = async (userId, reason = 'Banned from admin panel') => {
   const payload = await request(`/users/${userId}/ban`, {
     method: 'POST',

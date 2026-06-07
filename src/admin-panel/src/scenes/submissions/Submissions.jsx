@@ -1,7 +1,6 @@
 import {
   Alert,
   CircularProgress,
-  Paper,
   Table,
   TableBody,
   TableContainer,
@@ -11,21 +10,26 @@ import {
 import { styled } from '@mui/material/styles';
 import TableCell, { tableCellClasses } from '@mui/material/TableCell';
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import StatusBadge from '../../components/StatusBadge';
 import { formatDateTime } from '../../services/formatters';
 import { getSubmissions } from '../../services/submissionService';
 import { getTasks } from '../../services/taskService';
 
 const StyledTableCell = styled(TableCell)(() => ({
   [`&.${tableCellClasses.head}`]: {
-    backgroundColor: 'var(--accent-dark)',
-    color: 'var(--accent-contrast)',
+    backgroundColor: 'var(--box-light)',
+    color: 'var(--text-secondary)',
     borderBottom: '1px solid var(--border)',
-    fontWeight: 'bold',
+    fontSize: '12px',
+    fontWeight: 800,
+    textTransform: 'uppercase',
   },
   [`&.${tableCellClasses.body}`]: {
     color: 'var(--text-h)',
     backgroundColor: 'var(--box)',
     borderBottom: '1px solid var(--border)',
+    fontSize: '14px',
   },
 }));
 
@@ -43,6 +47,7 @@ const Submissions = () => {
   const [submissions, setSubmissions] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     const loadData = async () => {
@@ -77,17 +82,8 @@ const Submissions = () => {
       <h1>Submissions</h1>
       {error ? <Alert severity="error">{error}</Alert> : null}
 
-      <TableContainer
-        component={Paper}
-        sx={{
-          backgroundColor: 'var(--box)',
-          boxShadow: 'none',
-          border: '1px solid var(--border)',
-          borderRadius: '12px',
-          marginTop: 2,
-        }}
-      >
-        <Table aria-label="submissions table">
+      <TableContainer className="admin-table-container">
+        <Table aria-label="submissions table" className="admin-table">
           <TableHead>
             <TableRow>
               <StyledTableCell>ID</StyledTableCell>
@@ -111,11 +107,18 @@ const Submissions = () => {
               </StyledTableRow>
             ) : (
               submissions.map((submission) => (
-                <StyledTableRow key={submission.id}>
+                <StyledTableRow
+                  key={submission.id}
+                  hover
+                  onClick={() => navigate(`/submissions/${submission.id}`)}
+                  sx={{ cursor: 'pointer' }}
+                >
                   <StyledTableCell>{submission.id}</StyledTableCell>
                   <StyledTableCell>{submission.taskTitle}</StyledTableCell>
                   <StyledTableCell>{submission.userId}</StyledTableCell>
-                  <StyledTableCell>{submission.verdict}</StyledTableCell>
+                  <StyledTableCell>
+                    <StatusBadge value={submission.verdict} />
+                  </StyledTableCell>
                   <StyledTableCell>
                     {formatDateTime(submission.createdAt)}
                   </StyledTableCell>

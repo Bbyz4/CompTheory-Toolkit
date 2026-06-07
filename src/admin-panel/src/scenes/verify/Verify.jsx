@@ -56,16 +56,7 @@ const Verify = () => {
   return (
     <div className="verify">
       <h1>Verify your email</h1>
-      <Paper
-        elevation={0}
-        sx={{
-          p: 3,
-          borderRadius: '12px',
-          border: '1px solid var(--border)',
-          backgroundColor: 'var(--box)',
-          maxWidth: 520,
-        }}
-      >
+      <Paper elevation={0} className="verify-panel">
         {state.status === 'loading' ? <CircularProgress size={24} /> : null}
         {state.status === 'success' ? (
           <Alert severity="success">{state.message}</Alert>
