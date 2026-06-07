@@ -15,7 +15,10 @@ public class TaskFolderPrefabBehaviour : MonoBehaviour
 
     public void FillData(string folderName, TaskListBehaviour listParent)
     {
-        taskTitleText.text = folderName;
+        taskTitleText.text = folderName.Length > 15
+            ? folderName.Substring(0, 15) + "..."
+            : folderName;
+
         taskOpenButton.onClick.RemoveAllListeners();
 
         taskOpenButton.onClick.AddListener(() =>

@@ -5,7 +5,10 @@ public static class ModelData
     public enum ModelType
     {
         PDA,
-        NFA
+        NFA,
+        CFG,
+        TM,
+        LBA
     };
 
     public static ModelType modelType;

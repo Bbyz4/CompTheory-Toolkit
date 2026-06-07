@@ -3,108 +3,123 @@ using Newtonsoft.Json;
 using System.IO;
 using TMPro;
 using System;
-
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
+using SimpleFileBrowser;
 
 public class DiGraphJSONButtonsBehaviour : MonoBehaviour
 {
     [SerializeField] private DiGraphManager graphManager;
 
+    void Start()
+    {
+        FileBrowser.SetFilters(true, new FileBrowser.Filter("JSON Files", ".json"));
+        FileBrowser.SetDefaultFilter(".json");
+    }
+
     public void ExportToJSON()
     {
-        #if UNITY_EDITOR
-
         string defaultName =  (ModelData.modelType == ModelData.ModelType.PDA ? "PDA" : "DFA");
 
-        string path = EditorUtility.SaveFilePanel(
-            "Save automaton as JSON",
+        FileBrowser.ShowSaveDialog(
+            (paths) => 
+            {
+                if(paths == null || paths.Length == 0)
+                {
+                    return;
+                }
+
+                SaveGraphToPath(paths[0]);
+            },
+            () => { },
+            FileBrowser.PickMode.Files,
+            false,
             Application.persistentDataPath,
             defaultName,
             "json"
         );
+    }
 
-        if(string.IsNullOrEmpty(path))
-        {
-            return;
-        }
+    public void ImportFromJSON()
+    {
+        FileBrowser.ShowLoadDialog(
+            (paths) =>
+            {
+                if(paths == null || paths.Length == 0)
+                {
+                    return;
+                }
 
+                LoadGraphFromPath(paths[0]);
+            },
+            () => { },
+            FileBrowser.PickMode.Files,
+            false,
+            Application.persistentDataPath,
+            null,
+            "json"
+        );
+    }
+
+    private void SaveGraphToPath(string path)
+    {
         try
         {
             if(ModelData.modelType == ModelData.ModelType.PDA)
             {
-                PDAJsonForm data = DiGraphJSONConverter.ConvertGraphicPDAToJSON(graphManager);
+                PDAJsonForm data =
+                    DiGraphJSONConverter.ConvertGraphicPDAToJSON(graphManager);
 
-                string json = JsonConvert.SerializeObject(data, Formatting.Indented);
+                string json =
+                    JsonConvert.SerializeObject(data, Formatting.Indented);
 
                 File.WriteAllText(path, json);
             }
             else
             {
-                NFAJsonForm data = DiGraphJSONConverter.ConvertGraphicNFAToJSON(graphManager);
+                NFAJsonForm data =
+                    DiGraphJSONConverter.ConvertGraphicNFAToJSON(graphManager);
 
-                string json = JsonConvert.SerializeObject(data, Formatting.Indented);
+                string json =
+                    JsonConvert.SerializeObject(data, Formatting.Indented);
 
                 File.WriteAllText(path, json);
-            }   
+            }
         }
         catch(Exception e)
         {
-            Debug.LogError($"Error while exporting JSON: {e}");
+            Debug.LogError($"Export error: {e}");
         }
-
-        #endif
     }
 
-    //This for now will only work in the unity editor
-    public void ImportFromJSON()
+    private void LoadGraphFromPath(string path)
     {
-        #if UNITY_EDITOR
-
-        string path = EditorUtility.OpenFilePanel("Select JSON file", Application.persistentDataPath, "json");
-
-        if(!string.IsNullOrEmpty(path))
+        try
         {
-            try
+            string json = File.ReadAllText(path);
+
+            if(ModelData.modelType == ModelData.ModelType.PDA)
             {
-                if(ModelData.modelType == ModelData.ModelType.PDA)
-                {                   
-                    string json = File.ReadAllText(path);
+                PDAJsonForm data =
+                    JsonConvert.DeserializeObject<PDAJsonForm>(json);
 
-                    PDAJsonForm data = JsonConvert.DeserializeObject<PDAJsonForm>(json);
-
-                    if(data != null && data.type == "PDA")
-                    {
-                        DiGraphJSONConverter.ApplyPDAFromJSON(graphManager, data);
-                    }
-                    else
-                    {
-                        Debug.Log("Incorrect PDA file");
-                    }
-                }
+                if(data != null && data.type == "PDA")
+                    DiGraphJSONConverter.ApplyPDAFromJSON(graphManager, data);
                 else
-                {
-                    string json = File.ReadAllText(path);
-
-                    NFAJsonForm data = JsonConvert.DeserializeObject<NFAJsonForm>(json);
-
-                    if(data != null && data.type == "NFA")
-                    {
-                        DiGraphJSONConverter.ApplyNFAFromJSON(graphManager, data);
-                    }
-                    else
-                    {
-                        Debug.Log("Incorrect NFA file");
-                    }   
-                }
+                    Debug.Log("Incorrect PDA file");
             }
-            catch(Exception e)
+            else
             {
-                Debug.LogError($"Error importing JSON: {e.Message}");
+                NFAJsonForm data =
+                    JsonConvert.DeserializeObject<NFAJsonForm>(json);
+
+                if(data != null && data.type == "NFA")
+                    DiGraphJSONConverter.ApplyNFAFromJSON(graphManager, data);
+                else
+                    Debug.Log("Incorrect NFA file");
             }
         }
-
-        #endif
+        catch(Exception e)
+        {
+            Debug.LogError($"Import error: {e}");
+        }
     }
 }

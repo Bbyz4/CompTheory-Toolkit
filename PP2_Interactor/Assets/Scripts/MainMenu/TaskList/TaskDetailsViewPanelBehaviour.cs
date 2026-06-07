@@ -2,10 +2,11 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
+using System.Collections;
+using System.IO;
+using System.Text;
+using UnityEngine.Networking;
+using SimpleFileBrowser;
 
 public class TaskDetailsViewPanelBehaviour : MonoBehaviour
 {
@@ -28,7 +29,7 @@ public class TaskDetailsViewPanelBehaviour : MonoBehaviour
     public void FillData(TaskDescriptor taskDesc)
     {
         taskTitleText.text = taskDesc.taskName;
-        taksDescText.text = taskDesc.taskDescription;
+        taksDescText.text = $"REQUIRED AUTOMATON TYPE: {taskDesc.automatonType} \n\n {taskDesc.taskDescription}";
 
         goBackButton.onClick.RemoveAllListeners();
         goBackButton.onClick.AddListener(() =>
@@ -49,6 +50,14 @@ public class TaskDetailsViewPanelBehaviour : MonoBehaviour
                     ModelData.modelType = ModelData.ModelType.NFA;
                     SceneManager.LoadScene("DiGraphEditor");
                     break;
+                case "CFG":
+                    ModelData.modelType = ModelData.ModelType.CFG;
+                    SceneManager.LoadScene("CFGEditor");
+                    break;
+                case "TM":
+                    ModelData.modelType = ModelData.ModelType.TM;
+                    SceneManager.LoadScene("TMEditor");
+                    break;
                 default:
                     Debug.LogError("Automaton type not supported yet");
                     break;
@@ -58,18 +67,76 @@ public class TaskDetailsViewPanelBehaviour : MonoBehaviour
         uploadSolutionButton.onClick.RemoveAllListeners();
         uploadSolutionButton.onClick.AddListener(() =>
         {
-            //This for now will only work in the unity editor
+            FileBrowser.ShowLoadDialog(
+                (paths) =>
+                {
+                    if(paths == null || paths.Length == 0)
+                        return;
 
-            #if UNITY_EDITOR
+                    StartCoroutine(
+                        UploadSubmissionCoroutine(
+                            taskDesc.taskID,
+                            paths[0]
+                        )
+                    );
+                },
+                () => { },
+                FileBrowser.PickMode.Files,
+                false,
+                Application.persistentDataPath,
+                null,
+                "json"
+            );
+        });
+    }
 
-            string path = EditorUtility.OpenFilePanel("Select JSON file", Application.persistentDataPath, "json");
+    private IEnumerator UploadSubmissionCoroutine(
+        int taskId,
+        string jsonFilePath)
+    {
+        string automatonJson = File.ReadAllText(jsonFilePath);
 
-            if(!string.IsNullOrEmpty(path))
+        string requestBody = $@"
+        {{
+            ""data"": {automatonJson}
+        }}";
+
+        byte[] bodyRaw = Encoding.UTF8.GetBytes(requestBody);
+
+        string url =
+            $"https://recognita.xyz/api/v1/tasks/{taskId}/submissions";
+
+        using(UnityWebRequest request =
+            new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST))
+        {
+            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            request.downloadHandler = new DownloadHandlerBuffer();
+
+            request.SetRequestHeader(
+                "Content-Type",
+                "application/json");
+
+            if(!string.IsNullOrEmpty(ApplicationData.accessToken))
             {
-                Debug.Log("Here, solution would be sent to the backend and we would wait for response");
+                request.SetRequestHeader(
+                    "Authorization",
+                    $"Bearer {ApplicationData.accessToken}");
             }
 
-            #endif
-        });
+            yield return request.SendWebRequest();
+
+            Debug.Log($"Submission status: {(long)request.responseCode}");
+            Debug.Log(request.downloadHandler.text);
+
+            if(request.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError(
+                    $"Submission failed: {request.error}");
+            }
+            else
+            {
+                Debug.Log("Submission uploaded successfully");
+            }
+        }
     }
 }

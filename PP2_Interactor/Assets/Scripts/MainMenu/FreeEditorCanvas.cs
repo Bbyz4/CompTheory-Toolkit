@@ -18,6 +18,14 @@ public class FreeEditorCanvas : MonoBehaviour
                 ModelData.modelType = ModelData.ModelType.PDA;
                 SceneManager.LoadScene("DiGraphEditor");
                 break;
+            case 2:
+                ModelData.modelType = ModelData.ModelType.CFG;
+                SceneManager.LoadScene("CFGEditor");
+                break;
+            case 3:
+                ModelData.modelType = ModelData.ModelType.TM;
+                SceneManager.LoadScene("TMEditor");
+                break;
             default:
                 break;
         }

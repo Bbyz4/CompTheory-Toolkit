@@ -15,4 +15,11 @@ public static class ApplicationData
         wasColorEverModified = true;
         ColorSettingsChanged?.Invoke();
     }
+
+    //------------------USER----------------------
+
+    public static bool isUserLogged = false;
+    public static int loggedUserID = -1;
+    public static string loggedUserName = "";
+    public static string accessToken = "";
 }

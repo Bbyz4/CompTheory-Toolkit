@@ -115,9 +115,9 @@ public class CFGFreeRunManager : MonoBehaviour
 
         stepHistory.Add(new StepDescription
         {
-           wordState = currentWordState,
-           expansionIDs = currentExpansionIDs,
-           largestFreeID = currentLargestFreeID 
+        wordState = new List<string>(currentWordState),
+        expansionIDs = new List<int>(currentExpansionIDs),
+        largestFreeID = currentLargestFreeID 
         });
 
         GameObject newStepObj = Instantiate(freeRunStepPrefab, stepListContent.transform);
@@ -179,10 +179,10 @@ public class CFGFreeRunManager : MonoBehaviour
         }
         else
         {    
-            int historyIndex = stepID - 1;
+            int historyIndex = stepID;
 
-            currentWordState = stepHistory[historyIndex].wordState;
-            currentExpansionIDs = stepHistory[historyIndex].expansionIDs;
+            currentWordState = new List<string>(stepHistory[historyIndex].wordState);
+            currentExpansionIDs = new List<int>(stepHistory[historyIndex].expansionIDs);
             currentLargestFreeID = stepHistory[historyIndex].largestFreeID;
 
             while(stepHistory.Count > currentStepID)

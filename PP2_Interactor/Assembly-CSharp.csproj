@@ -59,7 +59,7 @@
     <UnityVersion>6000.0.3f1</UnityVersion>
   </PropertyGroup>
   <ItemGroup>
-    <Analyzer Include="C:\Users\trzos\.vscode\extensions\visualstudiotoolsforunity.vstuc-1.2.2\Analyzers\Microsoft.Unity.Analyzers.dll" />
+    <Analyzer Include="C:\Users\Admin\.vscode\extensions\visualstudiotoolsforunity.vstuc-1.2.2\Analyzers\Microsoft.Unity.Analyzers.dll" />
     <Analyzer Include="C:\Program Files\Unity\Hub\Editor\6000.0.3f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.SourceGenerators.dll" />
     <Analyzer Include="C:\Program Files\Unity\Hub\Editor\6000.0.3f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.Properties.SourceGenerator.dll" />
     <Analyzer Include="C:\Program Files\Unity\Hub\Editor\6000.0.3f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.UIToolkit.SourceGenerator.dll" />
@@ -67,11 +67,12 @@
   <ItemGroup>
     <Compile Include="Assets\Scripts\CFGEditor\CFGTestRunPopup.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_TextEventHandler.cs" />
-    <Compile Include="Assets\Scripts\NFA\Popups\NodeAddPopup.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\EnvMapAnimator.cs" />
     <Compile Include="Assets\Scripts\MainMenu\AppSettings\AutomaticBackgroundChanger.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_TextSelector_A.cs" />
     <Compile Include="Assets\Scripts\MainMenu\LibraryTab\LibraryModelObtainer.cs" />
+    <Compile Include="Assets\Scripts\TMEditor\TMTestRunPopup.cs" />
+    <Compile Include="Assets\Scripts\TMEditor\JSONUtils\TMJsonConverter.cs" />
     <Compile Include="Assets\Scripts\CFGEditor\JSONUtils\CFGJSONButtonsBehaviour.cs" />
     <Compile Include="Assets\Scripts\MainMenu\TaskList\TaskPrefabBehaviour.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\Benchmark02.cs" />
@@ -79,9 +80,9 @@
     <Compile Include="Assets\Scripts\NFANodeBehaviour.cs" />
     <Compile Include="Assets\Scripts\CFGVisualizer.cs" />
     <Compile Include="Assets\Scripts\DiGraphEditor\JSONUtils\DiGraphJSONButtonsBehaviour.cs" />
+    <Compile Include="Assets\Scripts\TMEditor\TMTransitionListManager.cs" />
     <Compile Include="Assets\Scripts\DiGraphEditor\DiGraphNodeDisplay.cs" />
-    <Compile Include="Assets\Scripts\TestMain.cs" />
-    <Compile Include="Assets\Scripts\NFAVisualizer.cs" />
+    <Compile Include="Assets\Scripts\CFGEditor\JSONUtils\CFGJsonConverter.cs" />
     <Compile Include="Assets\Scripts\CFGEditor\CFGProductionListManager.cs" />
     <Compile Include="Assets\Scripts\CameraMovement.cs" />
     <Compile Include="Assets\Scripts\MainMenu\LibraryTab\LibraryBehaviour.cs" />
@@ -93,6 +94,7 @@
     <Compile Include="Assets\Scripts\NFAEdgeBehaviour.cs" />
     <Compile Include="Assets\Scripts\DiGraphEditor\Popups\DiGraphPopupManager.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\VertexJitter.cs" />
+    <Compile Include="Assets\Scripts\TMEditor\TMInputManager.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_UiFrameRateCounter.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\VertexZoom.cs" />
     <Compile Include="Assets\Scripts\DiGraphEditor\DiGraphToolbarColorManager.cs" />
@@ -107,8 +109,9 @@
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\WarpTextExample.cs" />
     <Compile Include="Assets\Scripts\DiGraphEditor\DiGraphEdgeDisplay.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\ShaderPropAnimator.cs" />
+    <Compile Include="Assets\Scripts\TMEditor\TMGeneralInfoPopup.cs" />
     <Compile Include="Assets\Scripts\DiGraphEditor\JSONUtils\PDAJsonForm.cs" />
-    <Compile Include="Assets\Scripts\NFAGraphManager.cs" />
+    <Compile Include="Assets\Scripts\TMEditor\TMTransitionAddPopup.cs" />
     <Compile Include="Assets\Scripts\CFGEditor\CFGGeneralInfoPopup.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_TextInfoDebugTool.cs" />
     <Compile Include="Assets\Scripts\CFGEditor\CFGManager.cs" />
@@ -122,11 +125,15 @@
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\Benchmark04.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\ChatController.cs" />
     <Compile Include="Assets\Scripts\MainMenu\AppSettings\AutomaticColorChanger.cs" />
+    <Compile Include="Assets\Scripts\TMEditor\JSONUtils\TMJsonButtonsBehaviour.cs" />
     <Compile Include="Assets\Scripts\DiGraphEditor\Popups\DiGraphEdgeAddPopup.cs" />
+    <Compile Include="Assets\Scripts\TMEditor\Visualization\TMFreeRunManager.cs" />
     <Compile Include="Assets\Scripts\MainMenu\ModelData.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_DigitValidator.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_FrameRateCounter.cs" />
     <Compile Include="Assets\Scripts\CFGEditor\CFGInputManager.cs" />
+    <Compile Include="Assets\Scripts\TMEditor\TMPopupManager.cs" />
+    <Compile Include="Assets\Scripts\MainMenu\LoginCanvasBehaviour.cs" />
     <Compile Include="Assets\Scripts\MainMenu\TaskList\TaskFolderPrefabBehaviour.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\Benchmark01.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TextMeshSpawner.cs" />
@@ -137,23 +144,23 @@
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\DropdownSample.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\VertexColorCycler.cs" />
     <Compile Include="Assets\Scripts\RulePrefabBehaviour.cs" />
+    <Compile Include="Assets\Scripts\TMEditor\JSONUtils\TMJsonForm.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\ObjectSpin.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_PhoneNumberValidator.cs" />
-    <Compile Include="Assets\Scripts\NFA\NFANodeNumber.cs" />
-    <Compile Include="Assets\Scripts\NFA\Popups\EdgeAddPopup.cs" />
     <Compile Include="Assets\Scripts\DiGraphEditor\Popups\DiGraphTestRunPopup.cs" />
     <Compile Include="Assets\Scripts\GraphNodePrefabBehaviour.cs" />
     <Compile Include="Assets\Scripts\DiGraphEditor\Popups\DiGraphNodeEditPopup.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TextConsoleSimulator.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TeleType.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TMP_TextEventCheck.cs" />
-    <Compile Include="Assets\Scripts\TestMain2.cs" />
-    <Compile Include="Assets\Scripts\NFA\Popups\LaunchAlgPopup.cs" />
+    <Compile Include="Assets\Scripts\TMEditor\TMTransitionPrefabBehaviour.cs" />
     <Compile Include="Assets\Scripts\CFGEditor\Visualization\CFGFreeRunManager.cs" />
     <Compile Include="Assets\TextMesh Pro\Examples &amp; Extras\Scripts\TextMeshProFloatingText.cs" />
+    <Compile Include="Assets\Scripts\CFGEditor\JSONUtils\CFGJsonForm.cs" />
     <Compile Include="Assets\Scripts\MainMenu\LibraryTab\LibraryModelPrefabBehaviour.cs" />
     <Compile Include="Assets\Scripts\MainMenu\LibraryTab\LibraryUploadedModelViewPanelBehaviour.cs" />
     <Compile Include="Assets\Scripts\DiGraphEditor\DiGraphEdgeData.cs" />
+    <Compile Include="Assets\Scripts\TMEditor\TMManager.cs" />
     <Compile Include="Assets\Scripts\MainMenu\TaskList\TaskDetailsViewPanelBehaviour.cs" />
     <Compile Include="Assets\Scripts\CFGEditor\CFGProductionAddPopup.cs" />
     <Compile Include="Assets\Scripts\MainMenu\ApplicationData.cs" />
@@ -1361,6 +1368,10 @@
     </Reference>
     <Reference Include="Unity.Mathematics">
       <HintPath>Library\ScriptAssemblies\Unity.Mathematics.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="SimpleFileBrowser.Runtime">
+      <HintPath>Library\ScriptAssemblies\SimpleFileBrowser.Runtime.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Unity.RenderPipelines.Core.Editor">

@@ -1,5 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System.Collections;
+using UnityEngine.Networking;
 
 public class UploadedModelDescriptor
 {
@@ -9,6 +13,8 @@ public class UploadedModelDescriptor
     public string modelAuthor;
     public string modelDesc;
     public string modelType;
+
+    public string modelJSONstring;
 }
 
 public class LibraryBehaviour : MonoBehaviour
@@ -113,10 +119,120 @@ public class LibraryBehaviour : MonoBehaviour
     void Awake()
     {
         modelDetailsPanel.gameObject.SetActive(false);
-
-        RefreshUploadedModelData();
-        LoadFolderList();
     }
 
+    void OnEnable()
+    {
+        StartCoroutine(RefreshUploadedModelsCoroutine());
+    }
+
+    [System.Serializable]
+    public class SubmissionsResponse
+    {
+        public List<SubmissionDto> submissions;
+    }
+
+    public class SubmissionDto
+    {
+        public int id;
+
+        [JsonProperty("task_id")]
+        public int taskId;
+
+        public JObject data;
+
+        public string verdict;
+
+        [JsonProperty("created_at")]
+        public string createdAt;
+
+        [JsonProperty("judged_at")]
+        public string judgedAt;
+    }
+
+    private IEnumerator RefreshUploadedModelsCoroutine()
+    {
+        using(UnityWebRequest request =
+            UnityWebRequest.Get(
+                "https://recognita.xyz/api/v1/submissions?scope=mine"))
+        {
+            request.downloadHandler = new DownloadHandlerBuffer();
+
+            if(!string.IsNullOrEmpty(ApplicationData.accessToken))
+            {
+                request.SetRequestHeader(
+                    "Authorization",
+                    $"Bearer {ApplicationData.accessToken}");
+            }
+
+            yield return request.SendWebRequest();
+
+            Debug.Log($"Submissions Status: {(long)request.responseCode}");
+            Debug.Log(request.downloadHandler.text);
+
+            if(request.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError(request.error);
+                yield break;
+            }
+
+            BuildUploadedModelDictionary(
+                request.downloadHandler.text);
+
+            LoadFolderList();
+        }
+    }
+
+    private void BuildUploadedModelDictionary(string json)
+    {
+        SubmissionsResponse response =
+            JsonConvert.DeserializeObject<SubmissionsResponse>(json);
+
+        folderNameList = new List<string>();
+        uploadedModelsForGivenFolder =
+            new Dictionary<string, List<UploadedModelDescriptor>>();
+
+        const string folderName = "MY_SUBMITS";
+
+        folderNameList.Add(folderName);
+        uploadedModelsForGivenFolder[folderName] =
+            new List<UploadedModelDescriptor>();
+
+        foreach(SubmissionDto submission in response.submissions)
+        {
+            string modelType = "UNKNOWN";
+
+            if(submission.data != null &&
+            submission.data["type"] != null)
+            {
+                modelType =
+                    submission.data["type"].ToString();
+            }
+
+            UploadedModelDescriptor model =
+                new UploadedModelDescriptor
+                {
+                    internalID = -1,
+
+                    modelName = $"#{submission.id}  [{submission.verdict}]",
+
+                    folderName = folderName,
+
+                    modelAuthor = "me",
+
+                    modelDesc =
+                        $"task_id: {submission.taskId} \nstatus: {submission.verdict}",
+
+                    modelType = modelType,
+
+                    modelJSONstring =
+                        submission.data?.ToString(
+                            Formatting.None)
+                };
+
+            uploadedModelsForGivenFolder[folderName]
+                .Add(model);
+        }
+    }
 }
 
