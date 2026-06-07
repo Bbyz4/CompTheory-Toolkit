@@ -74,7 +74,7 @@ jobs:
 
   build-image:
     needs: build-test
-    if: github.event_name == 'push' && github.ref_name == 'merge-components'
+    if: github.event_name == 'push' && (github.ref_name == 'merge-components' || github.ref_name == 'simple-satori')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -171,7 +171,7 @@ jobs:
 
   deploy:
     needs: build-image
-    if: github.event_name == 'push' && github.ref_name == 'merge-components'
+    if: github.event_name == 'push' && (github.ref_name == 'merge-components' || github.ref_name == 'simple-satori')
     runs-on: ubuntu-latest
     permissions:
       contents: read
