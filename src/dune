@@ -2,5 +2,16 @@
 
 (library
  (name toolkit)
+ (foreign_stubs
+  (language cxx)
+  (names judge_bridge_stubs)
+  (flags
+   (:standard -std=c++17
+    -I
+    ../../../judge
+    -isystem
+    /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1)))
+ (c_library_flags
+  (:standard -Wl,-rpath,/opt/homebrew/opt/llvm/lib/c++))
  (libraries unix str lwt.unix yojson dream uri caqti-lwt
    caqti-driver-postgresql safepass))

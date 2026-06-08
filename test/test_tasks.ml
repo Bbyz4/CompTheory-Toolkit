@@ -1,6 +1,28 @@
 open Yojson.Basic.Util
 open Test_support
 
+let explicit_tests_config tests =
+  model_construction_config
+    ~grader:
+      (`Assoc
+        [
+          ("kind", `String "explicit-tests");
+          ("tests", `List (List.map (fun value -> `String value) tests));
+        ])
+    ()
+
+let process_one_submission fixture =
+  let worker_deps : Toolkit.Submission_worker.deps =
+    {
+      repo = fixture.repo;
+      queue = fixture.submission_queue;
+      clock = fixture.clock;
+      judging_delay_seconds = (fun () -> 0.);
+    }
+  in
+  Lwt_main.run (Toolkit.Submission_worker.process_next worker_deps)
+  |> unwrap_ok
+
 let test_delete_user_cascades_owned_tasks_and_submissions () =
   let fixture = make_fixture () in
   let admin_access = login_admin fixture in
@@ -140,6 +162,111 @@ let test_submission_is_created_pending_and_worker_judges_it () =
         "Worker should persist mock run_data"
   | None -> fail "Stored submission should still be queryable"
 
+let test_explicit_tests_worker_accepts_matching_nfa () =
+  let fixture = make_fixture () in
+  let admin_access = login_admin fixture in
+  let created_task =
+    create_task fixture admin_access ~title:"Accept explicit"
+      ~config:(explicit_tests_config [ "a" ]) ()
+  in
+  assert_status `Created created_task;
+  let task_id = task_id_of_response created_task in
+  let registered =
+    register fixture "explicit_solver" "explicit_solver@example.com"
+      "password123"
+  in
+  assert_status `Created registered;
+  let solver_access = token_of_response registered "access_token" in
+  let created_submission =
+    request fixture ~meth:`POST
+      ~target:(Printf.sprintf "/api/v1/tasks/%d/submissions" task_id)
+      ~headers:
+        [
+          ("Authorization", "Bearer " ^ solver_access);
+          ("Content-Type", "application/json");
+        ]
+      ~body:
+        (Yojson.Basic.to_string
+           (`Assoc [ ("data", valid_nfa_submission_data ()) ]))
+      ()
+  in
+  assert_status `Created created_submission;
+  let submission_id = submission_id_of_response created_submission in
+  assert_true (process_one_submission fixture)
+    "Worker should process the explicit-tests submission";
+  let stored_submission =
+    Lwt_main.run (fixture.repo.find_submission_by_id submission_id)
+    |> unwrap_repo_ok
+  in
+  match stored_submission with
+  | Some submission ->
+      assert_true
+        (submission.verdict = Toolkit.Domain.Accepted)
+        "Explicit-tests worker should accept an NFA that accepts every test";
+      let run_data =
+        match submission.run_data with
+        | Some value -> value
+        | None -> fail "Explicit-tests worker should persist run_data"
+      in
+      assert_true
+        (run_data |> member "strategy" |> to_string = "explicit-tests-nfa")
+        "Explicit-tests run_data should record the strategy"
+  | None -> fail "Stored submission should still be queryable"
+
+let test_explicit_tests_worker_rejects_first_failed_test () =
+  let fixture = make_fixture () in
+  let admin_access = login_admin fixture in
+  let created_task =
+    create_task fixture admin_access ~title:"Reject explicit"
+      ~config:(explicit_tests_config [ "a"; "aa" ]) ()
+  in
+  assert_status `Created created_task;
+  let task_id = task_id_of_response created_task in
+  let registered =
+    register fixture "explicit_solver_bad" "explicit_solver_bad@example.com"
+      "password123"
+  in
+  assert_status `Created registered;
+  let solver_access = token_of_response registered "access_token" in
+  let created_submission =
+    request fixture ~meth:`POST
+      ~target:(Printf.sprintf "/api/v1/tasks/%d/submissions" task_id)
+      ~headers:
+        [
+          ("Authorization", "Bearer " ^ solver_access);
+          ("Content-Type", "application/json");
+        ]
+      ~body:
+        (Yojson.Basic.to_string
+           (`Assoc [ ("data", valid_nfa_submission_data ()) ]))
+      ()
+  in
+  assert_status `Created created_submission;
+  let submission_id = submission_id_of_response created_submission in
+  assert_true (process_one_submission fixture)
+    "Worker should process the explicit-tests submission";
+  let stored_submission =
+    Lwt_main.run (fixture.repo.find_submission_by_id submission_id)
+    |> unwrap_repo_ok
+  in
+  match stored_submission with
+  | Some submission ->
+      assert_true
+        (submission.verdict = Toolkit.Domain.Rejected)
+        "Explicit-tests worker should reject the first unaccepted test";
+      let run_data =
+        match submission.run_data with
+        | Some value -> value
+        | None -> fail "Explicit-tests worker should persist run_data"
+      in
+      assert_true
+        (run_data |> member "failed_test_index" |> to_int = 1)
+        "Explicit-tests run_data should report the failed test index";
+      assert_true
+        (run_data |> member "failed_test" |> to_string = "aa")
+        "Explicit-tests run_data should report the failed test value"
+  | None -> fail "Stored submission should still be queryable"
+
 let test_task_config_template_endpoint () =
   let fixture = make_fixture () in
   let response =
@@ -255,6 +382,27 @@ let test_admin_can_update_task_with_explicit_tests_grader () =
     (task_json |> member "published_at" <> `Null)
     "Publishing an updated draft should set published_at"
 
+let test_explicit_tests_config_requires_nfa () =
+  let config =
+    model_construction_config ~required_model_type:"CFG"
+      ~grader:
+        (`Assoc
+          [
+            ("kind", `String "explicit-tests");
+            ("tests", `List [ `String "a" ]);
+          ])
+      ()
+  in
+  match
+    Toolkit.Task_config.validate_task_config
+      ~task_type:Toolkit.Domain.Model_construction config
+  with
+  | Error message ->
+      assert_true
+        (contains_substring ~needle:"NFA" message)
+        "Explicit-tests non-NFA config error should mention NFA"
+  | Ok _ -> fail "Explicit-tests config should require NFA submissions"
+
 let test_task_without_slug_gets_generated_slug_and_can_be_loaded_by_slug () =
   let fixture = make_fixture () in
   let admin_access = login_admin fixture in
@@ -338,11 +486,17 @@ let tests : test_case list =
       test_admin_creates_task_and_public_list_exposes_it );
     ( "submission_is_created_pending_and_worker_judges_it",
       test_submission_is_created_pending_and_worker_judges_it );
+    ( "explicit_tests_worker_accepts_matching_nfa",
+      test_explicit_tests_worker_accepts_matching_nfa );
+    ( "explicit_tests_worker_rejects_first_failed_test",
+      test_explicit_tests_worker_rejects_first_failed_test );
     ("task_config_template_endpoint", test_task_config_template_endpoint);
     ( "admin_scope_all_lists_private_and_draft_tasks",
       test_admin_scope_all_lists_private_and_draft_tasks );
     ( "admin_can_update_task_with_explicit_tests_grader",
       test_admin_can_update_task_with_explicit_tests_grader );
+    ( "explicit_tests_config_requires_nfa",
+      test_explicit_tests_config_requires_nfa );
     ( "task_without_slug_gets_generated_slug_and_can_be_loaded_by_slug",
       test_task_without_slug_gets_generated_slug_and_can_be_loaded_by_slug );
     ("submissions_scope_mine_vs_all", test_submissions_scope_mine_vs_all);

@@ -26,6 +26,7 @@ RUN sudo apt-get update \
       bash \
       ca-certificates \
       curl \
+      g++ \
       git \
       libev-dev \
       libgmp-dev \
@@ -91,6 +92,7 @@ RUN apt-get update \
       libgmp10 \
       libpq5 \
       libssl3 \
+      libstdc++6 \
       python3 \
       python3-fake-factory \
  && rm -rf /var/lib/apt/lists/* \

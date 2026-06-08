@@ -83,14 +83,22 @@ module Model_construction = struct
     | Error message, _ | _, Error message ->
         Error message
     | Ok parsed_grader, Ok parsed_required_model_type ->
-        Ok
-          (`Assoc
-             [
-               ("grader", parsed_grader);
-               ( "requiredModelType",
-                 `String
-                   (Domain.model_type_to_string parsed_required_model_type) );
-             ])
+        let explicit_tests =
+          parsed_grader |> member "kind" = `String "explicit-tests"
+        in
+        if explicit_tests && parsed_required_model_type <> Domain.Nfa then
+          Error
+            (error "config.requiredModelType"
+               "must be equal to \"NFA\" when using explicit-tests")
+        else
+          Ok
+            (`Assoc
+               [
+                 ("grader", parsed_grader);
+                 ( "requiredModelType",
+                   `String
+                     (Domain.model_type_to_string parsed_required_model_type) );
+               ])
 
   let required_model_type config =
     match config |> member "requiredModelType" with
