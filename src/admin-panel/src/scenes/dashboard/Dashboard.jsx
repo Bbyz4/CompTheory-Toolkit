@@ -29,7 +29,6 @@ const Dashboard = () => {
     tasks: 0,
     users: 0,
     submissions: 0,
-    bannedUsers: 0,
   });
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
@@ -47,7 +46,6 @@ const Dashboard = () => {
           tasks: tasks.length,
           users: users.length,
           submissions: submissions.length,
-          bannedUsers: users.filter((user) => user.isBanned).length,
         });
         setError('');
       } catch (nextError) {
@@ -72,7 +70,6 @@ const Dashboard = () => {
           <StatCard label="Tasks" value={stats.tasks} />
           <StatCard label="Users" value={stats.users} />
           <StatCard label="Submissions" value={stats.submissions} />
-          <StatCard label="Banned users" value={stats.bannedUsers} />
         </Box>
       )}
     </div>

@@ -12,6 +12,7 @@ import {
 import { styled } from '@mui/material/styles';
 import TableCell, { tableCellClasses } from '@mui/material/TableCell';
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { formatDateTime } from '../../services/formatters';
 import { banUser, getUsers, unbanUser } from '../../services/userService';
 
@@ -44,6 +45,7 @@ const Students = () => {
   const [loading, setLoading] = React.useState(true);
   const [pendingUserId, setPendingUserId] = React.useState(null);
   const [error, setError] = React.useState('');
+  const navigate = useNavigate();
 
   const loadUsers = React.useCallback(async () => {
     setLoading(true);
@@ -60,10 +62,40 @@ const Students = () => {
   }, []);
 
   React.useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    let active = true;
 
-  const handleBanToggle = async (user) => {
+    const loadInitialUsers = async () => {
+      setLoading(true);
+
+      try {
+        const nextUsers = await getUsers();
+
+        if (!active) {
+          return;
+        }
+
+        setUsers(nextUsers);
+        setError('');
+      } catch (nextError) {
+        if (active) {
+          setError(nextError.message);
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadInitialUsers();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleBanToggle = async (event, user) => {
+    event.stopPropagation();
     setPendingUserId(user.id);
 
     try {
@@ -79,6 +111,10 @@ const Students = () => {
     } finally {
       setPendingUserId(null);
     }
+  };
+
+  const openUser = (user) => {
+    navigate(`/students/${user.id}`);
   };
 
   return (
@@ -121,7 +157,12 @@ const Students = () => {
               </StyledTableRow>
             ) : (
               users.map((user) => (
-                <StyledTableRow key={user.id}>
+                <StyledTableRow
+                  key={user.id}
+                  hover
+                  onClick={() => openUser(user)}
+                  sx={{ cursor: 'pointer' }}
+                >
                   <StyledTableCell>{user.username}</StyledTableCell>
                   <StyledTableCell>{user.email}</StyledTableCell>
                   <StyledTableCell>{user.role}</StyledTableCell>
@@ -134,7 +175,7 @@ const Students = () => {
                     <Button
                       variant="outlined"
                       color={user.isBanned ? 'success' : 'error'}
-                      onClick={() => handleBanToggle(user)}
+                      onClick={(event) => handleBanToggle(event, user)}
                       disabled={pendingUserId === user.id}
                     >
                       {pendingUserId === user.id ? (

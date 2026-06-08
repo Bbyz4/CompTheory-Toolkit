@@ -7,7 +7,9 @@ import Sidebar from './scenes/global/Sidebar';
 import Topbar from './scenes/global/Topbar';
 import Settings from './scenes/settings/Settings';
 import Students from './scenes/students/Students';
+import UserProfile from './scenes/students/UserProfile';
 import Submissions from './scenes/submissions/Submissions';
+import SubmissionDetails from './scenes/submissions/SubmissionDetails';
 import TaskDetails from './scenes/tasks/TaskDetails';
 import TaskEditor from './scenes/tasks/TaskEditor';
 import Tasks from './scenes/tasks/Tasks';
@@ -86,7 +88,9 @@ function App() {
               <Route path="/tasks/:slug/edit" element={<TaskEditor />} />
               <Route path="/tasks/:slug" element={<TaskDetails />} />
               <Route path="/submissions" element={<Submissions />} />
+              <Route path="/submissions/:id" element={<SubmissionDetails />} />
               <Route path="/students" element={<Students />} />
+              <Route path="/students/:id" element={<UserProfile />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/verify" element={<Verify />} />
               <Route path="*" element={<Dashboard />} />

@@ -1,6 +1,7 @@
 import {
   Alert,
   CircularProgress,
+  Link as MuiLink,
   Paper,
   Table,
   TableBody,
@@ -11,6 +12,7 @@ import {
 import { styled } from '@mui/material/styles';
 import TableCell, { tableCellClasses } from '@mui/material/TableCell';
 import React from 'react';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { formatDateTime } from '../../services/formatters';
 import { getSubmissions } from '../../services/submissionService';
 import { getTasks } from '../../services/taskService';
@@ -43,6 +45,7 @@ const Submissions = () => {
   const [submissions, setSubmissions] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     const loadData = async () => {
@@ -52,14 +55,18 @@ const Submissions = () => {
           getTasks(),
         ]);
 
-        const taskTitles = new Map(tasks.map((task) => [task.id, task.title]));
+        const taskLookup = new Map(tasks.map((task) => [task.id, task]));
 
         setSubmissions(
-          nextSubmissions.map((submission) => ({
-            ...submission,
-            taskTitle:
-              taskTitles.get(submission.taskId) ?? `Task #${submission.taskId}`,
-          })),
+          nextSubmissions.map((submission) => {
+            const task = taskLookup.get(submission.taskId);
+
+            return {
+              ...submission,
+              taskTitle: task?.title ?? `Task #${submission.taskId}`,
+              taskSlug: task?.slug ?? null,
+            };
+          }),
         );
         setError('');
       } catch (nextError) {
@@ -71,6 +78,10 @@ const Submissions = () => {
 
     loadData();
   }, []);
+
+  const openSubmission = (submission) => {
+    navigate(`/submissions/${submission.id}`);
+  };
 
   return (
     <div className="submissions">
@@ -111,10 +122,35 @@ const Submissions = () => {
               </StyledTableRow>
             ) : (
               submissions.map((submission) => (
-                <StyledTableRow key={submission.id}>
+                <StyledTableRow
+                  key={submission.id}
+                  hover
+                  onClick={() => openSubmission(submission)}
+                  sx={{ cursor: 'pointer' }}
+                >
                   <StyledTableCell>{submission.id}</StyledTableCell>
-                  <StyledTableCell>{submission.taskTitle}</StyledTableCell>
-                  <StyledTableCell>{submission.userId}</StyledTableCell>
+                  <StyledTableCell>
+                    {submission.taskSlug ? (
+                      <MuiLink
+                        component={RouterLink}
+                        to={`/tasks/${submission.taskSlug}`}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {submission.taskTitle}
+                      </MuiLink>
+                    ) : (
+                      submission.taskTitle
+                    )}
+                  </StyledTableCell>
+                  <StyledTableCell>
+                    <MuiLink
+                      component={RouterLink}
+                      to={`/students/${submission.userId}`}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {submission.userId}
+                    </MuiLink>
+                  </StyledTableCell>
                   <StyledTableCell>{submission.verdict}</StyledTableCell>
                   <StyledTableCell>
                     {formatDateTime(submission.createdAt)}

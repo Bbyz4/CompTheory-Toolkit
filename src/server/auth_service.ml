@@ -323,6 +323,17 @@ let list_users deps ~access_token =
       | Ok users -> ok users
       | Error repo_error -> error (map_repo_error repo_error))
 
+let get_user deps ~access_token ~user_id =
+  let* admin_result = ensure_admin deps ~access_token in
+  match admin_result with
+  | Error app_error -> error app_error
+  | Ok _context -> (
+      let* found = deps.repo.find_user_by_id user_id in
+      match found with
+      | Ok (Some user) -> ok (Domain.public_user_of_user user)
+      | Ok None -> error (App_error.Not_found "User not found")
+      | Error repo_error -> error (map_repo_error repo_error))
+
 let set_ban deps ~access_token ~user_id ~is_banned ~ban_reason =
   let* admin_result = ensure_admin deps ~access_token in
   match admin_result with
