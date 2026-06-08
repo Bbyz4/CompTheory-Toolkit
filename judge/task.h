@@ -7,7 +7,7 @@
 #include "task_base.h"
 #include <string>
 
-struct Task : TaskBase {
+struct Task : public TaskBase {
     std::vector<std::string> mustAccept;
     std::vector<std::string> mustReject;
 

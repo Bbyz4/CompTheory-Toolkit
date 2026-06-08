@@ -11,6 +11,8 @@ struct TaskBase {
     Verdict verdict(AutomatonBase const &);
     bool kindAcceptable(AutomatonBase const &);
 
+    virtual ~TaskBase() = default;
+
     private:
     virtual bool test(AutomatonBase const &) = 0;
 };

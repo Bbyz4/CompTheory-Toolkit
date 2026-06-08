@@ -1,6 +1,7 @@
 #ifndef AUTOMATON_KIND_H
 #define AUTOMATON_KIND_H
-
+#include <unordered_map>
+#include <string>
 
 enum class AutomatonKind : unsigned char {
     DFA = 1,
@@ -12,6 +13,6 @@ enum class AutomatonKind : unsigned char {
     TM = 8
 }; // NFA nieparzyste (NVM nie ma znaczenia)
 
-
+extern const std::unordered_map<std::string, AutomatonKind> automationKindMap;
 
 #endif

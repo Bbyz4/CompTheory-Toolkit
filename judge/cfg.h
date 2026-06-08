@@ -35,7 +35,7 @@ struct CNF {
     bool cyk(std::string_view, std::unordered_map<char, int> const &terminals) const;
 };
 
-struct CFG : AutomatonBase {
+struct CFG : public AutomatonBase {
     int start;
     int next_id=1;
     std::unordered_map<char, int> terminals;

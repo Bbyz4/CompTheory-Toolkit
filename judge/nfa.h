@@ -20,9 +20,9 @@ struct NFA_state {
 };
 
 
-struct NFA : AutomatonBase {
+struct NFA : public AutomatonBase {
     std::vector<NFA_state> states;
-    int init_state;
+    std::vector<int> start_states;
     AutomatonKind kind;
 
     static const char EPSILON;

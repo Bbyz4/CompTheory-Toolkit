@@ -3,7 +3,7 @@
 
 #include "task_base.h"
 
-struct MockTask : TaskBase {
+struct MockTask : public TaskBase {
     virtual bool test(AutomatonBase const &);
 };
 

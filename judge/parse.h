@@ -6,7 +6,7 @@
 #include <string>
 #include <memory>
 
-// TaskBase parse_task(std::string);
-// AutomatonBase parse_automaton(std::string);
+std::unique_ptr<TaskBase> parse_task(char*);
+std::unique_ptr<AutomatonBase> parse_automaton(char*);
 
 #endif

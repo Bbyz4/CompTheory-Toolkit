@@ -5,7 +5,7 @@ using namespace std;
 const char NFA::EPSILON='\0';
 
 bool NFA::accepts(std::string_view s) const {
-    unordered_set<int> states = {this->init_state}, states_new;
+    unordered_set<int> states(this->start_states.begin(), this->start_states.end()), states_new;
 
     while (states.size()!=0) {
         // epsilon przejście
@@ -14,7 +14,7 @@ bool NFA::accepts(std::string_view s) const {
         for (int state: states) states_v.push_back(state);
 
         for (unsigned int i=0; i<states_v.size(); ++i) {
-            for (int state : this->states[states_v[i]].getTrans(EPSILON)) {
+            for (int state : this->states[i].getTrans(EPSILON)) {
                 if (states.find(state)==states.end()) {
                     states.insert(state);
                     states_v.push_back(state);
