@@ -267,6 +267,44 @@ let test_explicit_tests_worker_rejects_first_failed_test () =
         "Explicit-tests run_data should report the failed test value"
   | None -> fail "Stored submission should still be queryable"
 
+let test_admin_can_create_submission_for_user () =
+  let fixture = make_fixture () in
+  let admin_access = login_admin fixture in
+  let created_task = create_task fixture admin_access () in
+  assert_status `Created created_task;
+  let task_id = task_id_of_response created_task in
+  let registered =
+    register fixture "admin_created_solver" "admin-created@example.com"
+      "password123"
+  in
+  assert_status `Created registered;
+  let solver_id = user_id_of_response registered in
+  let response =
+    request fixture ~meth:`POST ~target:"/api/v1/submissions"
+      ~headers:
+        [
+          ("Authorization", "Bearer " ^ admin_access);
+          ("Content-Type", "application/json");
+        ]
+      ~body:
+        (Yojson.Basic.to_string
+           (`Assoc
+             [
+               ("task_id", `Int task_id);
+               ("user_id", `Int solver_id);
+               ("data", valid_nfa_submission_data ());
+             ]))
+      ()
+  in
+  assert_status `Created response;
+  let submission_json = response_json response |> member "submission" in
+  assert_true
+    (submission_json |> member "user_id" |> to_int = solver_id)
+    "Admin-created submission should use the requested submitter";
+  assert_true
+    (submission_json |> member "verdict" |> to_string = "PENDING")
+    "Admin-created valid submission should be queued as pending"
+
 let test_task_config_template_endpoint () =
   let fixture = make_fixture () in
   let response =
@@ -490,6 +528,8 @@ let tests : test_case list =
       test_explicit_tests_worker_accepts_matching_nfa );
     ( "explicit_tests_worker_rejects_first_failed_test",
       test_explicit_tests_worker_rejects_first_failed_test );
+    ( "admin_can_create_submission_for_user",
+      test_admin_can_create_submission_for_user );
     ("task_config_template_endpoint", test_task_config_template_endpoint);
     ( "admin_scope_all_lists_private_and_draft_tasks",
       test_admin_scope_all_lists_private_and_draft_tasks );

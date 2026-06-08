@@ -24,6 +24,136 @@ let mock_problem_slug index =
 let mock_problem_title index (spec : Mock_task.spec) =
   Printf.sprintf "Mock Problem %02d: %s" index spec.title
 
+(* Handmade startup data lives next to the generated mock batch, but stays
+   deterministic and human-authored so more fixtures can be added here later. *)
+let handmade_pilot_username = "Krzysztof-Potepa"
+
+let handmade_pilot_email = "teapot@solana.xchg"
+
+let handmade_pilot_password = "teapot-solana-xchg"
+
+let handmade_pilot_problem_slug = "pilot-problem"
+
+let handmade_pilot_problem_title = "Pilot problem"
+
+let handmade_pilot_tests = [ ""; "ab"; "abab"; "ababab" ]
+
+let handmade_pilot_config =
+  `Assoc
+    [
+      ( "grader",
+        `Assoc
+          [
+            ("kind", `String "explicit-tests");
+            ( "tests",
+              `List (List.map (fun value -> `String value) handmade_pilot_tests)
+            );
+          ] );
+      ("requiredModelType", `String "NFA");
+    ]
+
+let nfa_transition ~from_state ~to_state ?symbol () =
+  `Assoc
+    [
+      ("from", `String from_state);
+      ("to", `String to_state);
+      ( "symbol",
+        match symbol with Some value -> `String value | None -> `Null );
+    ]
+
+let nfa_submission_data ~states ~input_alphabet ~transitions ~start_states
+    ~accept_states =
+  `Assoc
+    [
+      ("type", `String "NFA");
+      ( "model",
+        `Assoc
+          [
+            ("states", `List (List.map (fun value -> `String value) states));
+            ( "inputAlphabet",
+              `List (List.map (fun value -> `String value) input_alphabet) );
+            ("transitions", `List transitions);
+            ( "startStates",
+              `List (List.map (fun value -> `String value) start_states) );
+            ( "acceptStates",
+              `List (List.map (fun value -> `String value) accept_states) );
+          ] );
+    ]
+
+let handmade_pilot_accepted_data =
+  nfa_submission_data ~states:[ "q0"; "q1" ] ~input_alphabet:[ "a"; "b" ]
+    ~transitions:
+      [
+        nfa_transition ~from_state:"q0" ~to_state:"q1" ~symbol:"a" ();
+        nfa_transition ~from_state:"q1" ~to_state:"q0" ~symbol:"b" ();
+      ]
+    ~start_states:[ "q0" ] ~accept_states:[ "q0" ]
+
+let handmade_pilot_rejected_data =
+  nfa_submission_data
+    ~states:[ "q0"; "q1"; "q2"; "q3"; "q4" ]
+    ~input_alphabet:[ "a"; "b" ]
+    ~transitions:
+      [
+        nfa_transition ~from_state:"q0" ~to_state:"q1" ~symbol:"a" ();
+        nfa_transition ~from_state:"q1" ~to_state:"q2" ~symbol:"b" ();
+        nfa_transition ~from_state:"q2" ~to_state:"q3" ~symbol:"a" ();
+        nfa_transition ~from_state:"q3" ~to_state:"q4" ~symbol:"b" ();
+      ]
+    ~start_states:[ "q0" ] ~accept_states:[ "q0"; "q2"; "q4" ]
+
+let handmade_pilot_invalid_format_data =
+  nfa_submission_data ~states:[ "q0"; "q1" ] ~input_alphabet:[ "a"; "b" ]
+    ~transitions:
+      [
+        nfa_transition ~from_state:"q0" ~to_state:"q1" ~symbol:"a" ();
+        nfa_transition ~from_state:"q1" ~to_state:"missing" ~symbol:"b" ();
+      ]
+    ~start_states:[ "q0" ] ~accept_states:[ "q0" ]
+
+type handmade_submission_case = {
+  key : string;
+  expected_verdict : Domain.submission_verdict;
+  data : Yojson.Basic.t;
+}
+
+let handmade_pilot_submission_cases =
+  [
+    {
+      key = "accepted";
+      expected_verdict = Domain.Accepted;
+      data = handmade_pilot_accepted_data;
+    };
+    {
+      key = "rejected";
+      expected_verdict = Domain.Rejected;
+      data = handmade_pilot_rejected_data;
+    };
+    {
+      key = "invalid_format";
+      expected_verdict = Domain.Invalid_format;
+      data = handmade_pilot_invalid_format_data;
+    };
+  ]
+
+let handmade_run_data_metadata_field = function
+  | "source" | "case" | "expected_verdict" -> true
+  | _ -> false
+
+let rec canonical_json = function
+  | `Assoc fields ->
+      `Assoc
+        (fields
+        |> List.map (fun (name, value) -> (name, canonical_json value))
+        |> List.sort (fun (left_name, _) (right_name, _) ->
+               String.compare left_name right_name))
+  | `List values -> `List (List.map canonical_json values)
+  | (`Null | `Bool _ | `Int _ | `Intlit _ | `Float _ | `Floatlit _ | `String _)
+    as value ->
+      value
+
+let json_equivalent left right = canonical_json left = canonical_json right
+
 let clamp_count value = max 0 value
 
 let seeded_verdict index =
@@ -403,6 +533,267 @@ let ensure_mock_submissions repo clock (users : Domain.user list)
         in
         with_preserved_random_state (fun () -> loop (existing_count + 1))
 
+let ensure_verified_user repo clock (user : Domain.user) =
+  if user.Domain.verified then
+    Lwt.return (Ok user)
+  else
+    let* marked =
+      repo.Repository.mark_user_verified ~user_id:user.Domain.id
+        ~updated_at:(clock.Clock.now ())
+    in
+    match marked with
+    | Ok (Some user) -> Lwt.return (Ok user)
+    | Ok None ->
+        Lwt.return
+          (internal_error
+             ("Handmade user disappeared before verification: "
+            ^ user.username))
+    | Error repo_error ->
+        Lwt.return
+          (repo_internal_error "Failed to verify handmade user" repo_error)
+
+let ensure_handmade_pilot_user repo clock =
+  match
+    ( Auth_service.validate_username handmade_pilot_username,
+      Auth_service.validate_email handmade_pilot_email,
+      Auth_service.validate_password handmade_pilot_password )
+  with
+  | Error app_error, _, _ | _, Error app_error, _ | _, _, Error app_error ->
+      Lwt.return
+        (Error
+           (App_error.Internal
+              ("Invalid handmade pilot user: " ^ App_error.message app_error)))
+  | Ok (), Ok email, Ok () ->
+      let rec find_by_email () =
+        let* found = repo.Repository.find_user_by_email email in
+        match found with
+        | Error repo_error ->
+            Lwt.return
+              (repo_internal_error "Failed to load handmade pilot user by email"
+                 repo_error)
+        | Ok (Some user) -> ensure_verified_user repo clock user
+        | Ok None ->
+            let* created =
+              repo.create_user ~username:handmade_pilot_username ~email
+                ~password_hash:(Password.make handmade_pilot_password)
+                ~role:Domain.User ~created_at:(clock.Clock.now ())
+            in
+            begin
+              match created with
+              | Ok user -> ensure_verified_user repo clock user
+              | Error (Repository.Conflict _) -> find_by_email ()
+              | Error repo_error ->
+                  Lwt.return
+                    (repo_internal_error "Failed to create handmade pilot user"
+                       repo_error)
+            end
+      in
+      let* found = repo.find_user_by_username handmade_pilot_username in
+      begin
+        match found with
+        | Error repo_error ->
+            Lwt.return
+              (repo_internal_error "Failed to load handmade pilot user"
+                 repo_error)
+        | Ok (Some user) -> ensure_verified_user repo clock user
+        | Ok None -> find_by_email ()
+      end
+
+let ensure_handmade_pilot_problem repo clock (author : Domain.user) =
+  let* found = repo.Repository.find_task_by_slug handmade_pilot_problem_slug in
+  match found with
+  | Error repo_error ->
+      Lwt.return
+        (repo_internal_error "Failed to load handmade pilot problem" repo_error)
+  | Ok (Some task) -> Lwt.return (Ok task)
+  | Ok None ->
+      let now = clock.Clock.now () in
+      let* created =
+        repo.create_task ~title:handmade_pilot_problem_title
+          ~slug:(Some handmade_pilot_problem_slug)
+          ~short_description:(Some "Build an NFA for strings in (ab)*.")
+          ~description:
+            "Build an NFA over the alphabet {a,b} that accepts exactly the \
+             empty string and strings formed by repeating ab, such as ab, abab \
+             and ababab."
+          ~type_:Domain.Model_construction ~author_id:author.Domain.id
+          ~difficulty:1 ~config:handmade_pilot_config ~status:Domain.Published
+          ~visibility:Domain.Public ~published_at:(Some now) ~created_at:now
+          ~updated_at:now
+      in
+      begin
+        match created with
+        | Ok task -> Lwt.return (Ok task)
+        | Error (Repository.Conflict _) -> (
+            let* reloaded =
+              repo.find_task_by_slug handmade_pilot_problem_slug
+            in
+            match reloaded with
+            | Ok (Some task) -> Lwt.return (Ok task)
+            | Ok None ->
+                Lwt.return
+                  (internal_error
+                     "Handmade pilot problem conflict could not be resolved")
+            | Error repo_error ->
+                Lwt.return
+                  (repo_internal_error
+                     "Failed to reload handmade pilot problem" repo_error))
+        | Error repo_error ->
+            Lwt.return
+              (repo_internal_error "Failed to create handmade pilot problem"
+                 repo_error)
+      end
+
+let handmade_submission_matches (task : Domain.task) (user : Domain.user)
+    (case : handmade_submission_case) (submission : Domain.submission) =
+  submission.task_id = task.id
+  && submission.user_id = user.id
+  && json_equivalent submission.data case.data
+
+let strip_handmade_run_data_metadata = function
+  | Some (`Assoc fields)
+    when List.exists
+           (fun (name, _) -> handmade_run_data_metadata_field name)
+           fields ->
+      let fields =
+        List.filter
+          (fun (name, _) -> not (handmade_run_data_metadata_field name))
+          fields
+      in
+      begin
+        match fields with
+        | [ ("worker_run_data", `Assoc worker_fields) ] -> Some (`Assoc worker_fields)
+        | _ ->
+            Some
+              (`Assoc
+                (List.filter (fun (name, _) -> name <> "worker_run_data") fields))
+      end
+  | _ -> None
+
+let clean_handmade_run_data repo clock (submission : Domain.submission) =
+  match strip_handmade_run_data_metadata submission.run_data with
+  | None -> Lwt.return (Ok ())
+  | Some run_data ->
+      let judged_at =
+        match submission.judged_at with
+        | Some value -> value
+        | None -> clock.Clock.now ()
+      in
+      let* updated =
+        repo.Repository.update_submission_result ~submission_id:submission.id
+          ~verdict:submission.verdict ~run_data:(Some run_data) ~judged_at
+      in
+      begin
+        match updated with
+        | Ok _ -> Lwt.return (Ok ())
+        | Error repo_error ->
+            Lwt.return
+              (repo_internal_error "Failed to clean handmade pilot submission"
+                 repo_error)
+      end
+
+let verify_handmade_submission repo clock (case : handmade_submission_case)
+    submission_id =
+  let worker_deps : Submission_worker.deps =
+    {
+      repo;
+      queue = Submission_queue.make_memory ();
+      clock;
+      judging_delay_seconds = (fun () -> 0.);
+    }
+  in
+  let* judged = Submission_worker.judge_submission worker_deps submission_id in
+  match judged with
+  | Error message ->
+      Lwt.return
+        (internal_error
+           ("Failed to judge handmade pilot submission " ^ case.key ^ ": "
+          ^ message))
+  | Ok () -> (
+      let* found = repo.Repository.find_submission_by_id submission_id in
+      match found with
+      | Error repo_error ->
+          Lwt.return
+            (repo_internal_error "Failed to reload handmade pilot submission"
+               repo_error)
+      | Ok None ->
+          Lwt.return
+            (internal_error "Handmade pilot submission disappeared after judging")
+      | Ok (Some submission) ->
+          if submission.verdict <> case.expected_verdict then
+            Lwt.return
+              (internal_error
+                 (Printf.sprintf
+                    "Handmade pilot submission %s produced %s, expected %s"
+                    case.key
+                    (Domain.submission_verdict_to_string submission.verdict)
+                    (Domain.submission_verdict_to_string
+                       case.expected_verdict)))
+          else
+            clean_handmade_run_data repo clock submission)
+
+let ensure_handmade_pilot_submission repo clock (user : Domain.user)
+    (task : Domain.task) (case : handmade_submission_case) =
+  let* listed = repo.Repository.list_submissions () in
+  match listed with
+  | Error repo_error ->
+      Lwt.return
+        (repo_internal_error "Failed to list handmade pilot submissions"
+           repo_error)
+  | Ok submissions -> (
+      match
+        List.find_opt
+          (handmade_submission_matches task user case)
+          submissions
+      with
+      | Some submission ->
+          verify_handmade_submission repo clock case submission.id
+      | None ->
+          let* created =
+            repo.create_submission ~task_id:task.id ~user_id:user.id
+              ~data:case.data ~created_at:(clock.Clock.now ())
+          in
+          begin
+            match created with
+            | Error repo_error ->
+                Lwt.return
+                  (repo_internal_error
+                     "Failed to create handmade pilot submission" repo_error)
+            | Ok submission ->
+                verify_handmade_submission repo clock case submission.id
+          end)
+
+let ensure_handmade_seed_data repo clock =
+  Lwt.catch
+    (fun () ->
+      let* user = ensure_handmade_pilot_user repo clock in
+      match user with
+      | Error _ as error -> Lwt.return error
+      | Ok user ->
+          let* task = ensure_handmade_pilot_problem repo clock user in
+          begin
+            match task with
+            | Error _ as error -> Lwt.return error
+            | Ok task ->
+                let rec loop = function
+                  | [] -> Lwt.return (Ok ())
+                  | case :: rest -> (
+                      let* ensured =
+                        ensure_handmade_pilot_submission repo clock user task
+                          case
+                      in
+                      match ensured with
+                      | Error _ as error -> Lwt.return error
+                      | Ok () -> loop rest)
+                in
+                loop handmade_pilot_submission_cases
+          end)
+    (fun exn ->
+      Lwt.return
+        (internal_error
+           ("Failed to generate handmade startup data: "
+          ^ Printexc.to_string exn)))
+
 let ensure_mock_seed_data repo clock config =
   let user_count = clamp_count config.Config.recognita_mock_user_count in
   let problem_count = clamp_count config.recognita_mock_problem_count in
@@ -436,7 +827,13 @@ let run_startup_steps repo clock config =
   let* admin_result = ensure_bootstrap_admin repo clock config in
   match admin_result with
   | Error _ as error -> Lwt.return error
-  | Ok () -> ensure_mock_seed_data repo clock config
+  | Ok () ->
+      let* handmade_result = ensure_handmade_seed_data repo clock in
+      begin
+        match handmade_result with
+        | Error _ as error -> Lwt.return error
+        | Ok () -> ensure_mock_seed_data repo clock config
+      end
 
 let with_startup_lock connection handler =
   let module Db = (val connection : Caqti_lwt.CONNECTION) in

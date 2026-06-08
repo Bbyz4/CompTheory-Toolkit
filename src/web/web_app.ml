@@ -208,6 +208,8 @@ let make config =
         Dream.get "/_admin_api/submissions" (fun request ->
             proxy_admin config request ~meth:"GET"
               "/api/v1/submissions?scope=all");
+        Dream.post "/_admin_api/submissions" (fun request ->
+            proxy_admin config request ~meth:"POST" "/api/v1/submissions");
         Dream.get "/_admin_api/submissions/:id" (fun request ->
             proxy_admin config request ~meth:"GET"
               ("/api/v1/submissions/" ^ Dream.param request "id"));
@@ -264,6 +266,7 @@ let make config =
         Dream.get "/tasks/:slug" render_page;
         Dream.get "/tasks/:slug/edit" render_page;
         Dream.get "/submissions" render_page;
+        Dream.get "/submissions/new" render_page;
         Dream.get "/submissions/:id" render_page;
         Dream.get "/students" render_page;
         Dream.get "/students/:id" render_page;

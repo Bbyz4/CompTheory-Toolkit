@@ -186,6 +186,36 @@
   padding: 24px;
 }
 
+.submission-editor-shell {
+  width: min(980px, 100%);
+}
+
+.submission-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.8fr);
+  gap: 16px;
+}
+
+.submission-json-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 24px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.submission-json-header .task-section-title {
+  margin-bottom: 0 !important;
+}
+
+.submission-json-field .MuiInputBase-inputMultiline {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .task-loading-state {
   display: flex;
   align-items: center;
@@ -419,6 +449,10 @@
   }
 
   .task-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .submission-form-grid {
     grid-template-columns: 1fr;
   }
 

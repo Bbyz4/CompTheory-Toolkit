@@ -10,6 +10,7 @@ import Students from './scenes/students/Students';
 import UserProfile from './scenes/students/UserProfile';
 import Submissions from './scenes/submissions/Submissions';
 import SubmissionDetails from './scenes/submissions/SubmissionDetails';
+import SubmissionEditor from './scenes/submissions/SubmissionEditor';
 import TaskDetails from './scenes/tasks/TaskDetails';
 import TaskEditor from './scenes/tasks/TaskEditor';
 import Tasks from './scenes/tasks/Tasks';
@@ -88,6 +89,7 @@ function App() {
               <Route path="/tasks/:slug/edit" element={<TaskEditor />} />
               <Route path="/tasks/:slug" element={<TaskDetails />} />
               <Route path="/submissions" element={<Submissions />} />
+              <Route path="/submissions/new" element={<SubmissionEditor />} />
               <Route path="/submissions/:id" element={<SubmissionDetails />} />
               <Route path="/students" element={<Students />} />
               <Route path="/students/:id" element={<UserProfile />} />

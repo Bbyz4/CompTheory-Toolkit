@@ -20,3 +20,24 @@ export const getSubmission = async (submissionId) => {
   const payload = await request(`/submissions/${submissionId}`);
   return mapSubmission(payload.submission);
 };
+
+export const createSubmission = async ({ taskId, userId, data }) => {
+  const body = {
+    task_id: taskId,
+    data,
+  };
+
+  if (userId) {
+    body.user_id = userId;
+  }
+
+  const payload = await request('/submissions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  return mapSubmission(payload.submission);
+};

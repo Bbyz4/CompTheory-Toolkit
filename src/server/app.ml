@@ -603,13 +603,49 @@ let make app =
                     | Ok _, Ok data -> (
                         let* result =
                           Task_service.create_submission current_task_deps
-                            ~context ~task_id ~data
+                            ~context ~user_id:None ~task_id ~data
                         in
                         match result with
                         | Ok submission ->
                             json_response ~code:201 (submission_json submission)
                         | Error app_error -> error_response app_error)
                     | Error app_error, _ | _, Error app_error ->
+                        error_response app_error)))
+  in
+  let handle_admin_create_submission request =
+    app.with_repo request (fun repo ->
+        let auth_deps = deps repo app in
+        let current_task_deps = task_deps repo app in
+        match access_token_from_request request with
+        | Error app_error -> error_response app_error
+        | Ok access_token -> (
+            let* admin_result = Auth_service.ensure_admin auth_deps ~access_token in
+            match admin_result with
+            | Error app_error -> error_response app_error
+            | Ok admin_context ->
+                let* json_result = parse_body request in
+                match json_result with
+                | Error app_error -> error_response app_error
+                | Ok json -> (
+                    match
+                      Json_utils.assoc_list json,
+                      Json_utils.int_field json "task_id",
+                      Json_utils.optional_int_field json "user_id",
+                      Json_utils.object_field json "data"
+                    with
+                    | Ok _, Ok task_id, Ok user_id, Ok data -> (
+                        let* result =
+                          Task_service.create_submission current_task_deps
+                            ~context:admin_context ~user_id ~task_id ~data
+                        in
+                        match result with
+                        | Ok submission ->
+                            json_response ~code:201 (submission_json submission)
+                        | Error app_error -> error_response app_error)
+                    | Error app_error, _, _, _
+                    | _, Error app_error, _, _
+                    | _, _, Error app_error, _
+                    | _, _, _, Error app_error ->
                         error_response app_error)))
   in
   let handle_submission request =
@@ -692,6 +728,7 @@ let make app =
         Dream.put "/tasks/:id" handle_update_task;
         Dream.post "/tasks/:id/submissions" handle_create_submission;
         Dream.get "/submissions" handle_submissions;
+        Dream.post "/submissions" handle_admin_create_submission;
         Dream.get "/submissions/:id" handle_submission;
       ];
     ]

@@ -505,9 +505,27 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "data"
+                ],
+                "properties": {
+                  "data": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Submission created and queued"
+            "description": "Submission created"
           }
         }
       }
@@ -540,6 +558,48 @@
           },
           "403": {
             "description": "Admin only for scope=all"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a submission as an admin",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "task_id",
+                  "data"
+                ],
+                "properties": {
+                  "task_id": {
+                    "type": "integer"
+                  },
+                  "user_id": {
+                    "type": "integer",
+                    "nullable": true
+                  },
+                  "data": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Submission created"
+          },
+          "403": {
+            "description": "Admin only"
           }
         }
       }

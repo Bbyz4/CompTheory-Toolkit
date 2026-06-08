@@ -1,6 +1,7 @@
+open Yojson.Basic.Util
 open Test_support
 
-let test_submission_rejects_invalid_nfa_payload () =
+let test_submission_records_invalid_nfa_payload_run_data () =
   let fixture = make_fixture () in
   let admin_access = login_admin fixture in
   let created_task = create_task fixture admin_access () in
@@ -54,7 +55,19 @@ let test_submission_rejects_invalid_nfa_payload () =
            (`Assoc [ ("data", invalid_duplicate_transition) ]))
       ()
   in
-  assert_status `Bad_Request response
+  assert_status `Created response;
+  let submission_json = response_json response |> member "submission" in
+  assert_true
+    (submission_json |> member "verdict" |> to_string = "INVALID_FORMAT")
+    "Invalid payload should create an INVALID_FORMAT submission";
+  assert_true
+    (submission_json |> member "run_data" |> member "strategy" |> to_string
+    = "invalid-format")
+    "Invalid payload run_data should record the invalid-format strategy";
+  assert_true
+    (submission_json |> member "run_data" |> member "message" |> to_string
+    |> contains_substring ~needle:"duplicate transitions")
+    "Invalid payload run_data should record the validation failure"
 
 let test_model_json_accepts_valid_nfa () =
   match Toolkit.Model_json.validate (valid_nfa_submission_data ()) with
@@ -63,7 +76,7 @@ let test_model_json_accepts_valid_nfa () =
 
 let tests : test_case list =
   [
-    ( "submission_rejects_invalid_nfa_payload",
-      test_submission_rejects_invalid_nfa_payload );
+    ( "submission_records_invalid_nfa_payload_run_data",
+      test_submission_records_invalid_nfa_payload_run_data );
     ("model_json_accepts_valid_nfa", test_model_json_accepts_valid_nfa);
   ]

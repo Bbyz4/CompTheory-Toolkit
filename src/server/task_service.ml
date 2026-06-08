@@ -96,6 +96,35 @@ let validate_submission_data ~task_type ~config data =
   | Ok normalized -> Ok normalized
   | Error message -> Error (App_error.Bad_request message)
 
+let diagnostic_run_data ~strategy (submission : Domain.submission) ~verdict
+    ~message ~judged_at =
+  `Assoc
+    [
+      ("source", `String "submission-api");
+      ("submission_id", `Int submission.id);
+      ("task_id", `Int submission.task_id);
+      ("user_id", `Int submission.user_id);
+      ("strategy", `String strategy);
+      ("verdict", `String (Domain.submission_verdict_to_string verdict));
+      ("message", `String message);
+      ("judged_at", `String (Util.iso8601_of_unix_time judged_at));
+    ]
+
+let persist_submission_result deps (submission : Domain.submission) ~verdict
+    ~strategy ~message =
+  let judged_at = deps.clock.now () in
+  let run_data =
+    diagnostic_run_data ~strategy submission ~verdict ~message ~judged_at
+  in
+  let* updated =
+    deps.repo.update_submission_result ~submission_id:submission.id ~verdict
+      ~run_data:(Some run_data) ~judged_at
+  in
+  match updated with
+  | Ok (Some next_submission) -> ok next_submission
+  | Ok None -> error (App_error.Not_found "Submission not found")
+  | Error repo_error -> error (map_repo_error repo_error)
+
 let can_manage_task (context : Auth_service.session_context) (task : Domain.task) =
   context.user.role = Domain.Admin || context.user.id = task.author_id
 
@@ -128,6 +157,23 @@ let load_task_by_slug deps slug =
   | Error repo_error -> error (map_repo_error repo_error)
   | Ok None -> error (App_error.Not_found "Task not found")
   | Ok (Some task) -> ok task
+
+let load_submission_user deps user_id =
+  let* found = deps.repo.find_user_by_id user_id in
+  match found with
+  | Error repo_error -> error (map_repo_error repo_error)
+  | Ok None -> error (App_error.Not_found "User not found")
+  | Ok (Some user) -> ok user
+
+let resolve_submission_user deps (context : Auth_service.session_context)
+    user_id =
+  match user_id with
+  | None -> ok context.user
+  | Some target_user_id ->
+      if context.user.role <> Domain.Admin then
+        error (App_error.Forbidden "Admin privileges required")
+      else
+        load_submission_user deps target_user_id
 
 let list_public_tasks deps =
   let* listed = deps.repo.list_tasks () in
@@ -248,8 +294,8 @@ let update_task deps ~admin_context:_ ~task_id ~title ~slug ~short_description
           | Ok None -> error (App_error.Not_found "Task not found")
           | Error repo_error -> error (map_repo_error repo_error))
 
-let create_submission deps ~(context : Auth_service.session_context) ~task_id
-    ~data =
+let create_submission deps ~(context : Auth_service.session_context) ~user_id
+    ~task_id ~data =
   let* task_result = load_task deps task_id in
   match task_result with
   | Error _ as app_error -> Lwt.return app_error
@@ -257,24 +303,47 @@ let create_submission deps ~(context : Auth_service.session_context) ~task_id
       if not (can_submit_to_task (Some context) task) then
         error (App_error.Not_found "Task not found")
       else
-        begin
+        let* submission_user_result =
+          resolve_submission_user deps context user_id
+        in
+        begin match submission_user_result with
+        | Error _ as app_error -> Lwt.return app_error
+        | Ok submission_user ->
+            let now = deps.clock.now () in
+            let create_pending submission_data =
+              deps.repo.create_submission ~task_id:task.id
+                ~user_id:submission_user.id ~data:submission_data ~created_at:now
+            in
+            let persist_internal submission message =
+              persist_submission_result deps submission
+                ~verdict:Domain.Internal_error ~strategy:"internal-error"
+                ~message
+            in
           match
             Task_config.validate_task_config ~task_type:task.type_ task.config
           with
-          | Error message -> error (App_error.Internal ("Stored task config is invalid: " ^ message))
+          | Error message -> (
+              let message = "Stored task config is invalid: " ^ message in
+              let* created = create_pending data in
+              match created with
+              | Error repo_error -> error (map_repo_error repo_error)
+              | Ok submission -> persist_internal submission message)
           | Ok normalized_config -> (
               match
                 validate_submission_data ~task_type:task.type_
                   ~config:normalized_config data
               with
-              | Error app_error -> error app_error
+              | Error app_error -> (
+                  let message = App_error.message app_error in
+                  let* created = create_pending data in
+                  match created with
+                  | Error repo_error -> error (map_repo_error repo_error)
+                  | Ok submission ->
+                      persist_submission_result deps submission
+                        ~verdict:Domain.Invalid_format
+                        ~strategy:"invalid-format" ~message)
               | Ok normalized_data ->
-                  let now = deps.clock.now () in
-                  let* created =
-                    deps.repo.create_submission ~task_id:task.id
-                      ~user_id:context.user.id ~data:normalized_data
-                      ~created_at:now
-                  in
+                  let* created = create_pending normalized_data in
                   match created with
                   | Error repo_error -> error (map_repo_error repo_error)
                   | Ok submission -> (
@@ -284,7 +353,7 @@ let create_submission deps ~(context : Auth_service.session_context) ~task_id
                       in
                       match published with
                       | Ok () -> ok submission
-                      | Error message -> error (App_error.Internal message)))
+                      | Error message -> persist_internal submission message))
         end
 
 let list_submissions deps ~(context : Auth_service.session_context) ~scope =

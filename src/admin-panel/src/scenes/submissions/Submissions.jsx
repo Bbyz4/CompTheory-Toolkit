@@ -1,5 +1,7 @@
 import {
   Alert,
+  Box,
+  Button,
   CircularProgress,
   Link as MuiLink,
   Paper,
@@ -9,6 +11,7 @@ import {
   TableHead,
   TableRow,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
 import { styled } from '@mui/material/styles';
 import TableCell, { tableCellClasses } from '@mui/material/TableCell';
 import React from 'react';
@@ -40,6 +43,17 @@ const StyledTableRow = styled(TableRow)(() => ({
     transition: '0.2s',
   },
 }));
+
+const actionButtonSx = {
+  backgroundColor: 'var(--accent-dark)',
+  color: 'var(--accent-contrast)',
+  border: '1px solid var(--border)',
+  boxShadow: 'none',
+  '&:hover': {
+    backgroundColor: 'var(--accent)',
+    boxShadow: 'none',
+  },
+};
 
 const Submissions = () => {
   const [submissions, setSubmissions] = React.useState([]);
@@ -85,7 +99,20 @@ const Submissions = () => {
 
   return (
     <div className="submissions">
-      <h1>Submissions</h1>
+      <Box className="task-page-header">
+        <h1>Submissions</h1>
+        <Box className="task-page-actions">
+          <Button
+            component={RouterLink}
+            to="/submissions/new"
+            variant="contained"
+            startIcon={<AddIcon />}
+            sx={actionButtonSx}
+          >
+            Create submission
+          </Button>
+        </Box>
+      </Box>
       {error ? <Alert severity="error">{error}</Alert> : null}
 
       <TableContainer
