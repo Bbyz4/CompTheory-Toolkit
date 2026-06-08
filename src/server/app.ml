@@ -341,6 +341,18 @@ let make app =
             | Ok users -> json_response ~code:200 (users_json users)
             | Error app_error -> error_response app_error))
   in
+  let handle_user request =
+    with_deps app request (fun deps ->
+        match access_token_from_request request, int_of_string_opt (Dream.param request "id") with
+        | Error app_error, _ -> error_response app_error
+        | _, None ->
+            error_response (App_error.Bad_request "User id must be an integer")
+        | Ok access_token, Some user_id -> (
+            let* result = Auth_service.get_user deps ~access_token ~user_id in
+            match result with
+            | Ok user -> json_response ~code:200 (user_json user)
+            | Error app_error -> error_response app_error))
+  in
   let handle_ban request =
     with_deps app request (fun deps ->
         match access_token_from_request request with
@@ -669,6 +681,7 @@ let make app =
         Dream.get "/me" handle_me;
         Dream.delete "/me" handle_delete_me;
         Dream.get "/users" handle_users;
+        Dream.get "/users/:id" handle_user;
         Dream.post "/users/:id/ban" handle_ban;
         Dream.post "/users/:id/unban" handle_unban;
         Dream.get "/task-types/:type/config-template" handle_task_config_template;

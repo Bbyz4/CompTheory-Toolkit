@@ -81,6 +81,59 @@ let test_non_admin_cannot_moderate () =
   in
   assert_status `Forbidden response
 
+let test_admin_gets_user_by_id () =
+  let fixture = make_fixture () in
+  let user_response =
+    register fixture "profiledave" "profiledave@example.com" "password123"
+  in
+  assert_status `Created user_response;
+  let user_id = user_id_of_response user_response in
+  let admin_access = login_admin fixture in
+  let response =
+    request fixture ~meth:`GET
+      ~target:(Printf.sprintf "/api/v1/users/%d" user_id)
+      ~headers:[ ("Authorization", "Bearer " ^ admin_access) ]
+      ()
+  in
+  assert_status `OK response;
+  let user = response_json response |> Yojson.Basic.Util.member "user" in
+  assert_true
+    (user |> Yojson.Basic.Util.member "username" |> Yojson.Basic.Util.to_string
+    = "profiledave")
+    "Admin user detail should return the requested username";
+  assert_true
+    (user |> Yojson.Basic.Util.member "email" |> Yojson.Basic.Util.to_string
+    = "profiledave@example.com")
+    "Admin user detail should return the requested email";
+  let invalid =
+    request fixture ~meth:`GET ~target:"/api/v1/users/not-an-integer"
+      ~headers:[ ("Authorization", "Bearer " ^ admin_access) ]
+      ()
+  in
+  assert_status `Bad_Request invalid;
+  let missing =
+    request fixture ~meth:`GET ~target:"/api/v1/users/999999"
+      ~headers:[ ("Authorization", "Bearer " ^ admin_access) ]
+      ()
+  in
+  assert_status `Not_Found missing
+
+let test_non_admin_cannot_get_user_by_id () =
+  let fixture = make_fixture () in
+  let alice = register fixture "profileerin" "profileerin@example.com" "password123" in
+  let bob = register fixture "profilefrank" "profilefrank@example.com" "password123" in
+  assert_status `Created alice;
+  assert_status `Created bob;
+  let alice_access = token_of_response alice "access_token" in
+  let bob_id = user_id_of_response bob in
+  let response =
+    request fixture ~meth:`GET
+      ~target:(Printf.sprintf "/api/v1/users/%d" bob_id)
+      ~headers:[ ("Authorization", "Bearer " ^ alice_access) ]
+      ()
+  in
+  assert_status `Forbidden response
+
 let test_admin_cli_lists_users_with_emails () =
   let repo, clock = make_admin_cli_fixture () in
   let created =
@@ -197,6 +250,8 @@ let tests : test_case list =
   [
     ("admin_lists_and_moderates_users", test_admin_lists_and_moderates_users);
     ("non_admin_cannot_moderate", test_non_admin_cannot_moderate);
+    ("admin_gets_user_by_id", test_admin_gets_user_by_id);
+    ("non_admin_cannot_get_user_by_id", test_non_admin_cannot_get_user_by_id);
     ("admin_cli_lists_users_with_emails", test_admin_cli_lists_users_with_emails);
     ("admin_cli_ban_revokes_sessions", test_admin_cli_ban_revokes_sessions);
     ("admin_cli_promotes_user_to_admin", test_admin_cli_promotes_user_to_admin);

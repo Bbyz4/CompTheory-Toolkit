@@ -182,6 +182,10 @@
   padding: 24px;
 }
 
+.admin-detail-shell {
+  padding: 24px;
+}
+
 .task-loading-state {
   display: flex;
   align-items: center;
@@ -271,6 +275,10 @@
   margin-top: 24px;
 }
 
+.profile-title {
+  color: var(--text-h);
+}
+
 .task-detail-copy,
 .task-detail-config {
   margin: 0;
@@ -281,6 +289,10 @@
   color: var(--text-h);
   white-space: pre-wrap;
   overflow-x: auto;
+}
+
+.admin-json-panel {
+  max-height: 460px;
 }
 
 .settings-panel {
@@ -397,7 +409,8 @@
   }
 
   .task-editor-shell,
-  .task-list-shell {
+  .task-list-shell,
+  .admin-detail-shell {
     padding: 16px;
   }
 
@@ -408,4 +421,5 @@
   .task-detail-grid {
     grid-template-columns: 1fr;
   }
+
 }

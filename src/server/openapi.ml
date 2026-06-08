@@ -173,6 +173,25 @@ let fallback =
         }
       }
     },
+    "/api/v1/users/{id}": {
+      "get": {
+        "summary": "Get one user",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "User returned" },
+          "403": { "description": "Admin only" },
+          "404": { "description": "User not found" }
+        }
+      }
+    },
     "/api/v1/users/{id}/ban": {
       "post": {
         "summary": "Ban a user",

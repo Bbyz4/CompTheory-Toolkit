@@ -196,6 +196,9 @@ let make config =
               ("/api/v1/tasks/" ^ Dream.param request "id"));
         Dream.get "/_admin_api/users" (fun request ->
             proxy_admin config request ~meth:"GET" "/api/v1/users");
+        Dream.get "/_admin_api/users/:id" (fun request ->
+            proxy_admin config request ~meth:"GET"
+              ("/api/v1/users/" ^ Dream.param request "id"));
         Dream.post "/_admin_api/users/:id/ban" (fun request ->
             proxy_admin config request ~meth:"POST"
               ("/api/v1/users/" ^ Dream.param request "id" ^ "/ban"));
@@ -205,6 +208,9 @@ let make config =
         Dream.get "/_admin_api/submissions" (fun request ->
             proxy_admin config request ~meth:"GET"
               "/api/v1/submissions?scope=all");
+        Dream.get "/_admin_api/submissions/:id" (fun request ->
+            proxy_admin config request ~meth:"GET"
+              ("/api/v1/submissions/" ^ Dream.param request "id"));
         Dream.post "/proxy/auth/register" (fun request ->
             proxy_json config request ~meth:"POST" "/api/v1/auth/register");
         Dream.post "/proxy/auth/login" (fun request ->
@@ -243,6 +249,9 @@ let make config =
               ("/api/v1/submissions/" ^ Dream.param request "id"));
         Dream.get "/proxy/users" (fun request ->
             proxy_authed config request ~meth:"GET" "/api/v1/users");
+        Dream.get "/proxy/users/:id" (fun request ->
+            proxy_authed config request ~meth:"GET"
+              ("/api/v1/users/" ^ Dream.param request "id"));
         Dream.post "/proxy/users/:id/ban" (fun request ->
             proxy_authed config request ~meth:"POST"
               ("/api/v1/users/" ^ Dream.param request "id" ^ "/ban"));
@@ -252,8 +261,12 @@ let make config =
         Dream.get "/" render_page;
         Dream.get "/dashboard" render_page;
         Dream.get "/tasks" render_page;
+        Dream.get "/tasks/:slug" render_page;
+        Dream.get "/tasks/:slug/edit" render_page;
         Dream.get "/submissions" render_page;
+        Dream.get "/submissions/:id" render_page;
         Dream.get "/students" render_page;
+        Dream.get "/students/:id" render_page;
         Dream.get "/settings" render_page;
         Dream.get "/verify" render_page;
       ]
